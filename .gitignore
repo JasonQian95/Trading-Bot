@@ -1,1 +1,7 @@
 Scoping.txt
+data
+
+setup
+
+__pycache__
+.idea
