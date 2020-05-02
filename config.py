@@ -1,9 +1,9 @@
 from os.path import dirname, join
 import datetime
 
-debug = True
+debug = False
 verbose = False  # more debug info
-dated = not debug  # dated filenames, turn off for testing
+dated = False  # dated filenames, turn off for testing
 refresh = False  # refresh files used for testing
 
 sp500 = "SP500"
@@ -12,6 +12,7 @@ vix = "VIXCLS"
 
 start_date = datetime.date(2005, 1, 1)
 end_date = datetime.date.today()
+date_format = "%Y%m%d"
 
 project_root = dirname(__file__)
 
