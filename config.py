@@ -1,19 +1,28 @@
 from os.path import dirname, join
 import datetime
 
+# Debug settings
 debug = False
 verbose = False  # more debug info
 dated = False  # dated filenames, turn off for testing
 refresh = False  # refresh files used for testing
 
+# Frequently used symbols
 sp500 = "SP500"
 index = "SPY"
 vix = "VIXCLS"
+sp500_yahoo = "^GSPC"
+test_symbol = "AAPL"
 
+# Date range for data, and formatting of dates for saved csvs
 start_date = datetime.date(2005, 1, 1)
 end_date = datetime.date.today()
 date_format = "%Y%m%d"
 
+import matplotlib
+matplotlib.rcParams['axes.prop_cycle'] = matplotlib.cycler(color=["blue", "red", "green", "yellow"])
+
+# Project structure absolute paths
 project_root = dirname(__file__)
 
 data_folder_name = "data"

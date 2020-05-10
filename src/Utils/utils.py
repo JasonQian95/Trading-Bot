@@ -14,6 +14,7 @@ def backfill(df):
     df.fillna(method="ffill", inplace=True)
 
 
+# Untested
 def reindex(df, backfill=True, start_date=config.start_date, end_date=config.end_date):
     """Reindexes the dataframe for all weekdays, by default leaving the inserted values null
 
@@ -63,6 +64,29 @@ def refresh(path, refresh=False):
     return not exists(path) or refresh
 
 
+def prettify(ax, title=""):
+    if ax.get_ylim()[0] < 0:
+        ax.set_ylim(ymin=0)
+    ax.set_xlim(config.start_date, config.end_date)
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Price")
+    ax.legend(loc="upper left")
+    if title != "":
+        ax.set_title(title)
+    # fig.autofmt_xdate()
+    # fig.set_size_inches(16, 9)
+
+
+# Class that tries to run tests in order, isnt working
+import unittest
+class SequentialTestLoader(unittest.TestLoader):
+    def getTestCaseNames(self, testCaseClass):
+        test_names = super().getTestCaseNames(testCaseClass)
+        testcase_methods = list(testCaseClass.__dict__.keys())
+        test_names.sort(key=testcase_methods.index)
+        return test_names
+
+
 # TODO: change this to use logging library
 def debug(s):
     import inspect
@@ -70,11 +94,14 @@ def debug(s):
     import matplotlib
     if config.debug:
         print(inspect.stack()[1].filename)
-        if isinstance(s, pandas.DataFrame):
+        if isinstance(s, pandas.DataFrame) or isinstance(s, pandas.Series):
             print(s if config.verbose else s.head(), flush=True)
         elif isinstance(s, matplotlib.axes.Axes):
-            matplotlib.pyplot.show()
+            pass
+            # matplotlib.pyplot.show()
             # TODO: close the grpah afterwards
             # TODO: set active axes/figure back to s. Until this is fixed, don't debug graphs
+        elif isinstance(s, matplotlib.pyplot.Figure):
+            matplotlib.pyplot.show()
         else:
             print(s, flush=True)
