@@ -25,7 +25,8 @@ def get_index(refresh=False):
         refresh : bool, optional
             Recreate the data file, regardless of whether or not it already exists
     Returns:
-        The symbol of the index as define in config
+        str
+            The symbol of the index as define in config
     """
 
     if utils.refresh(index_table_path, refresh):

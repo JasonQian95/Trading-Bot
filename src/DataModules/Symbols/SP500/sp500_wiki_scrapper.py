@@ -33,7 +33,8 @@ def get_sp500(refresh=False):
         refresh : bool, optional
 
     Returns:
-        A list of symbols contained in the SP500
+        list of str
+            A list of symbols contained in the SP500
     """
 
     if utils.refresh(sp500_symbols_table_path, refresh=refresh):
@@ -51,7 +52,8 @@ def get_sp500_by_sector(sector):
             The sector(s) to filter for
             List of sectors as of 26/4/2020: ['Communication Services', 'Consumer Discretionary', 'Consumer Staples', 'Energy', 'Financials', 'Health Care', 'Industrials', 'Information Technology', 'Materials', 'Real Estate', 'Utilities']
     Returns:
-        A list of symbols contained in the SP500 filtered by industry
+        list of str
+            A list of symbols contained in the SP500 filtered by industry
     """
 
     if utils.refresh(sp500_symbols_table_path):
@@ -73,7 +75,8 @@ def get_sp500_by_sub_sector(sector):
             The sector(s) to filter for
             List of sectors as of 26/4/2020: ['Advertising', 'Aerospace & Defense', 'Agricultural & Farm Machinery', 'Agricultural Products', 'Air Freight & Logistics', 'Airlines', 'Alternative Carriers', 'Apparel Retail', 'Apparel, Accessories & Luxury Goods', 'Application Software', 'Asset Management & Custody Banks', 'Auto Parts & Equipment', 'Automobile Manufacturers', 'Automotive Retail', 'Biotechnology', 'Brewers', 'Broadcasting', 'Building Products', 'Cable & Satellite', 'Casinos & Gaming', 'Commodity Chemicals', 'Communications Equipment', 'Computer & Electronics Retail', 'Construction & Engineering', 'Construction Machinery & Heavy Trucks', 'Construction Materials', 'Consumer Electronics', 'Consumer Finance', 'Copper', 'Data Processing & Outsourced Services', 'Department Stores', 'Distillers & Vintners', 'Distributors', 'Diversified Banks', 'Diversified Chemicals', 'Diversified Support Services', 'Drug Retail', 'Electric Utilities', 'Electrical Components & Equipment', 'Electronic Components', 'Electronic Equipment & Instruments', 'Electronic Manufacturing Services', 'Environmental & Facilities Services', 'Fertilizers & Agricultural Chemicals', 'Financial Exchanges & Data', 'Food Distributors', 'Food Retail', 'Gas Utilities', 'General Merchandise Stores', 'Gold', 'Health Care Distributors', 'Health Care Equipment', 'Health Care Facilities', 'Health Care REITs', 'Health Care Services', 'Health Care Supplies', 'Health Care Technology', 'Home Furnishings', 'Home Improvement Retail', 'Homebuilding', 'Hotel & Resort REITs', 'Hotels, Resorts & Cruise Lines', 'Household Appliances', 'Household Products', 'Housewares & Specialties', 'Human Resource & Employment Services', 'Hypermarkets & Super Centers', 'IT Consulting & Other Services', 'Independent Power Producers & Energy Traders', 'Industrial Conglomerates', 'Industrial Gases', 'Industrial Machinery', 'Industrial REITs', 'Insurance Brokers', 'Integrated Oil & Gas', 'Integrated Telecommunication Services', 'Interactive Home Entertainment', 'Interactive Media & Services', 'Internet & Direct Marketing Retail', 'Internet Services & Infrastructure', 'Investment Banking & Brokerage', 'Leisure Products', 'Life & Health Insurance', 'Life Sciences Tools & Services', 'Managed Health Care', 'Metal & Glass Containers', 'Motorcycle Manufacturers', 'Movies & Entertainment', 'Multi-Sector Holdings', 'Multi-Utilities', 'Multi-line Insurance', 'Office REITs', 'Oil & Gas Drilling', 'Oil & Gas Equipment & Services', 'Oil & Gas Exploration & Production', 'Oil & Gas Refining & Marketing', 'Oil & Gas Storage & Transportation', 'Packaged Foods & Meats', 'Paper Packaging', 'Personal Products', 'Pharmaceuticals', 'Property & Casualty Insurance', 'Publishing', 'Railroads', 'Real Estate Services', 'Regional Banks', 'Reinsurance', 'Research & Consulting Services', 'Residential REITs', 'Restaurants', 'Retail REITs', 'Semiconductor Equipment', 'Semiconductors', 'Soft Drinks', 'Specialized Consumer Services', 'Specialized REITs', 'Specialty Chemicals', 'Specialty Stores', 'Steel', 'Systems Software', 'Technology Distributors', 'Technology Hardware, Storage & Peripherals', 'Thrifts & Mortgage Finance', 'Tobacco', 'Trading Companies & Distributors', 'Trucking', 'Water Utilities', 'Wireless Telecommunication Services']
     Returns:
-        A list of symbols contained in the SP500 filtered by sub sector
+        list of str
+            A list of symbols contained in the SP500 filtered by sub sector
     """
 
     if utils.refresh(sp500_symbols_table_path):
@@ -91,7 +94,8 @@ def get_all_sp500_sectors():
     """Returns a list of valid sectors in the SP500
 
     Returns:
-        A list of valid sectors in the SP500
+        list of str
+            A list of valid sectors in the SP500
     """
 
     if utils.refresh(sp500_symbols_table_path):
@@ -104,7 +108,8 @@ def get_all_sp500_sub_sectors():
     """Returns a list of valid sub sectors in the SP500
 
     Returns:
-        A list of valid sub sectors in the SP500
+        list of str
+            A list of valid sub sectors in the SP500
     """
 
     if utils.refresh(sp500_symbols_table_path):
