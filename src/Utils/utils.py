@@ -1,11 +1,10 @@
-import pandas as pd
 import matplotlib as mpl
 from matplotlib.dates import YearLocator, MonthLocator, DateFormatter
-from os.path import join, exists
-import inspect
+import pandas as pd
 import config
 
-pd.plotting.register_matplotlib_converters()
+import inspect
+from os.path import join, exists
 
 
 def backfill(df):
@@ -19,7 +18,7 @@ def backfill(df):
     df.fillna(method="ffill", inplace=True)
 
 
-# Untested
+# Untested, don't think I'd ever need this with Yahoo's data
 def reindex(df, backfill=True, start_date=config.start_date, end_date=config.end_date):
     """Reindexes the dataframe for all weekdays, by default leaving the inserted values null
 
@@ -51,7 +50,10 @@ def get_file_path(path, filename, symbol, dated=config.dated, start_date=config.
             A file path combining the given data
     """
 
-    return join(path, symbol + ((start_date if isinstance(start_date, str) else (start_date.strftime(config.date_format)) + "-" + (end_date if isinstance(end_date, str) else end_date.strftime(config.date_format))) if dated else "") + filename)
+    symbol = symbol.upper()
+    start_date = (start_date if isinstance(start_date, str) else start_date.strftime(config.date_format))
+    end_date = (end_date if isinstance(end_date, str) else end_date.strftime(config.date_format))
+    return join(path, symbol + ((start_date + "-" + end_date) if dated else "") + filename)
 
 
 def refresh(path, refresh=False):
@@ -71,7 +73,7 @@ def refresh(path, refresh=False):
     return not exists(path) or refresh
 
 
-def prettify(ax, title="", center=False, start_date=config.start_date, end_date=config.end_date):
+def prettify_ax(ax, title="", center=False, start_date=config.start_date, end_date=config.end_date):
     """Makes matplotlib.pyplot.Axes look pretty
 
     Parameters:
@@ -87,42 +89,45 @@ def prettify(ax, title="", center=False, start_date=config.start_date, end_date=
         ax.set_title(title)
     ax.set_xlabel("Date")
     ax.set_ylabel("Price")
-    ax.legend()  # ax.legend(loc="upper left")
+    ax.legend()
+    # ax.legend(loc="upper left")
 
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
+    # ax.spines["top"].set_visible(False)
+    # ax.spines["right"].set_visible(False)
 
-    if not center and ax.get_ylim()[0] < 0:
-        ax.set_ylim(ymin=0)
-    # TODO: this isn't working
-    if center:
-        min_y = ax.get_ylim()[0].astype(int)
-        max_y = ax.get_ylim()[1].astype(int)
-        if abs(min_y) != abs(max_y):
-            ax.set_ylim(ymin=-max(abs(min_y), abs(max_y)), ymax=max(abs(min_y), abs(max_y)))
-    # ax.set_xlim(start_date, end_date)  # this is done automatically
     ax.xaxis.set_major_locator(YearLocator())
     ax.xaxis.set_minor_locator(MonthLocator((1, 7)))
     ax.xaxis.set_major_formatter(DateFormatter("\n%Y"))
     ax.xaxis.set_minor_formatter(DateFormatter("%b"))
 
-    # ax.get_xaxis().tick_bottom()  # this is normally the case
-    # ax.get_yaxis().tick_left()  # this is normally the case
+    ax.get_xaxis().tick_bottom()
+    ax.get_yaxis().tick_left()
+    # ax.tick_params(axis="both", which="both", bottom="off", top="off", labelbottom="on", left="off", right="off", labelleft="on")  # Remove the tick marks
 
     # TODO: do this for the dates too. Have to get locators, since there are too many ticks
     min_x = ax.get_xlim()[0].astype(int)
     max_x = ax.get_xlim()[1].astype(int)
     #for y in range(ax.get_ylim()[0], ax.get_ylim()[1], 10):
-    for y in ax.get_yticks().astype(int):
-        ax.plot(range(min_x, max_x), [y] * len(range(min_x, max_x)), "--", lw=0.5, color="black", alpha=0.3)
+    for y in ax.get_yticks().astype(float)[1:-1]:  # will the [1:-1] ever result in exceptions?
+        ax.plot(range(min_x, max_x), [y] * len(range(min_x, max_x)), "--", linewidth=0.5, color="black", alpha=0.3)
 
-    # ax.tick_params(axis="both", which="both", bottom="off", top="off", labelbottom="on", left="off", right="off", labelleft="on")  # Remove the tick marks
+    # This has to be done last
+    if not center and ax.get_ylim()[0] < 0:
+        ax.set_ylim(ymin=0)
+    if center:
+        min_y = ax.get_ylim()[0].astype(float)
+        max_y = ax.get_ylim()[1].astype(float)
+        if abs(min_y) != abs(max_y):
+            ax.set_ylim(ymin=-max(abs(min_y), abs(max_y)), ymax=max(abs(min_y), abs(max_y)))
+    # ax.set_xlim(start_date, end_date)  # this is done automatically
 
+
+def prettify_fig(fig, title="", start_date=config.start_date, end_date=config.end_date):
     # fig.autofmt_xdate()  # tilts dates
-    # fig.set_size_inches(16, 9)  # doesnt work?
+    # fig.set_size_inches(config.figsize)  # currently I always set this when creating the fig
+    fig.tight_layout()
 
 
-# TODO: change this to use logging library
 def debug(s):
     if config.debug:
         print(inspect.stack()[1].filename)
@@ -130,7 +135,7 @@ def debug(s):
             print(s if config.verbose else s.head(), flush=True)
         elif isinstance(s, mpl.axes.Axes):
             pass
-            # matplotlib.pyplot.show()
+            # mpl.pyplot.show()
             # TODO: close the grpah afterwards
             # TODO: set active axes/figure back to s. Until this is fixed, don't debug graphs
         elif isinstance(s, mpl.pyplot.Figure):

@@ -1,33 +1,43 @@
-import moving_average as avg
+import moving_average as ma
 import config
 import unittest
+import warnings
 
 
 class MovingAverageTest(unittest.TestCase):
 
-    def test_sma_sp500_50(self):
-        avg.sma(config.sp500, 50, refresh=config.refresh)
+    def setUp(self):
+        warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
+
+    def test_sma_index_50(self):
+        ma.sma(config.index, 50, refresh=config.refresh)
 
     def test_sma_aapl_200(self):
-        avg.sma(config.test_symbol, 200, refresh=config.refresh)
+        ma.sma(config.test_symbol, 200, refresh=config.refresh)
 
-    def test_ema_sp500_50(self):
-        avg.ema(config.sp500, 50, refresh=config.refresh)
+    def test_ema_index_50(self):
+        ma.ema(config.index, 50, refresh=config.refresh)
 
     def test_ema_aapl_200(self):
-        avg.ema(config.test_symbol, 200, refresh=config.refresh)
+        ma.ema(config.test_symbol, 200, refresh=config.refresh)
 
-    def test_plot_sma_sp500(self):
-        avg.plot_sma(config.sp500, refresh=config.refresh)
+    def test_plot_sma_index(self):
+        ma.plot_sma(config.index, refresh=config.refresh)
 
     def test_plot_sma_aapl(self):
-        avg.plot_sma(config.test_symbol, refresh=config.refresh)
+        ma.plot_sma(config.test_symbol, refresh=config.refresh)
 
-    def test_plot_ema_sp500(self):
-        avg.plot_ema(config.sp500, refresh=config.refresh)
+    def test_plot_ema_index(self):
+        ma.plot_ema(config.index, refresh=config.refresh)
 
     def test_plot_ema_aapl(self):
-        avg.plot_ema(config.test_symbol, refresh=config.refresh)
+        ma.plot_ema(config.test_symbol, refresh=config.refresh)
+
+    def test_generate_signals_sma_index(self):
+        ma.generate_signals(config.test_symbol, func=ma.sma_name, refresh=config.refresh)
+
+    def test_generate_signals_ema_index(self):
+        ma.generate_signals(config.test_symbol, func=ma.ema_name, refresh=config.refresh)
 
 
 if __name__ == '__main__':
