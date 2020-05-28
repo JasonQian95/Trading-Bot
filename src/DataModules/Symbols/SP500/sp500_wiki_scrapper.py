@@ -21,6 +21,8 @@ def download_sp500():
     df = table[0]
     # df = df.rename(columns=df.iloc[0]).drop(df.index[0])
     # df = table[0][1:].rename(columns=table[0].iloc[0])
+    df = df[df["Symbol"] not in config.broken_symbols]  # fix for TT
+    df["Symbol"] = df["Symbol"].str.replace(".", "-")  # fix for BRK.B and BF.B
     utils.debug(df)
     df.to_csv(sp500_full_table_path, index=False)
     df.to_csv(sp500_symbols_table_path, columns=[symbol_column_name], index=False)

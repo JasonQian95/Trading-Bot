@@ -73,6 +73,16 @@ class PricesTest(unittest.TestCase):
             self.skipTest("Too many files generated")
         p.get_during_hours_daily_return(config.test_symbol, refresh=config.refresh)
 
+    def test_get_daily_return_flex(self):
+        if config.skip_test:
+            self.skipTest("Too many files generated")
+        p.get_daily_return_flex(config.index, refresh=config.refresh)
+
+    def test_get_daily_return_flex_aapl(self):
+        if config.skip_test:
+            self.skipTest("Too many files generated")
+        p.get_daily_return_flex(config.test_symbol, refresh=config.refresh)
+
     def test_after_during_hours_returns_index(self):
         if config.skip_test:
             self.skipTest("Too many files generated")
@@ -93,6 +103,6 @@ class SequentialTestLoader(unittest.TestLoader):
 
 
 if __name__ == '__main__':
-    # TODO: make tests run in order. Unnessecary for passing tests, but I would like the final data files
+    # TODO: make tests run in order. Unnessecary for passing tests, but I would like the final data files even when refresh=True
     unittest.main(testLoader=SequentialTestLoader())
     unittest.TestLoader.sortTestMethodsUsing = None

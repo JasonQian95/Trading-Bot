@@ -1,33 +1,41 @@
-from os.path import dirname, join
-import datetime
 import matplotlib
 import pandas
 
+import datetime
+import warnings
+from os.path import dirname, join
+
 # Debug settings
-debug = True
+debug = False
 verbose = False  # more debug info
 dated = False  # dated filenames, turn off for testing
-refresh = True  # refresh files used for testing
+refresh = False  # refresh files used for testing
 skip_test = False  # skip some tests that generate excess files
+trash_data_files = True
 
 # Frequently used symbols
 index = "SPY"
 sp500_yahoo = "^GSPC"
 vix_yahoo = "^VIX"
 test_symbol = "AAPL"
+broken_symbols = ["TT"]
 
 # Date range for data, and formatting of dates for saved csvs
+# start_date = datetime.date(2003, 6, 19)  # SPY closed at 100.02 on this date
 start_date = datetime.date(2005, 1, 1)
 end_date = datetime.date.today()
-date_format = "%Y-%m-%d"
+date_format = "%Y_%m_%d"
 
 # pandas settings
 pandas.plotting.register_matplotlib_converters()
+date_parser = pandas.to_datetime  # add data_parser = config.data_parser to all read_csv, or try df.index = df.index.astype(datetime)
 
 # matplotlib settings
 figsize = (16, 9)
 scatter_size = 100
 scatter_alpha = 0.7
+matplotlib.rcParams['legend.loc'] = "best"
+matplotlib.rc("figure", max_open_warning=0)
 # Probbaly shouldn't use green or red
 matplotlib.rcParams['axes.prop_cycle'] = matplotlib.cycler(color=["blue", "green", "red", "cyan", "magenta"])
 # These are the "Tableau 20" colors as RGB. Curently unused
@@ -41,12 +49,18 @@ for i in range(len(tableau20)):
     r, g, b = tableau20[i]
     tableau20[i] = (r / 255., g / 255., b / 255.)
 
+# Ignore warnings
+warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
+warnings.simplefilter(action="ignore", category=FutureWarning)
+
 # Project structure absolute paths
 project_root = dirname(__file__)
 
 data_folder_name = "data"
 
+junk_folder_name = "Junk"
 prices_folder_name = "Prices"
+simulation_folder_name = "Simulation"
 ta_folder_name = "TA"
 symbols_folder_name = "SymbolLists"
 sp500_folder_name = "SP500"
@@ -54,9 +68,13 @@ sp500_folder_name = "SP500"
 graphs_folder_name = "Graphs"
 
 data_path = join(project_root, data_folder_name)
-prices_data_path = join(data_path, prices_folder_name)
-prices_graphs_path = join(prices_data_path, graphs_folder_name)
-ta_data_path = join(data_path, ta_folder_name)
-ta_graphs_path = join(ta_data_path, graphs_folder_name)
+junk_data_path = join(data_path, junk_folder_name)
+junk_graphs_path = join(junk_data_path, graphs_folder_name)
+prices_data_path = join(data_path, prices_folder_name) if not trash_data_files else junk_data_path
+prices_graphs_path = join(prices_data_path, graphs_folder_name) if not trash_data_files else junk_graphs_path
+simulation_data_path = join(data_path, simulation_folder_name)
+simulation_graphs_path = join(simulation_data_path, graphs_folder_name)
+ta_data_path = join(data_path, ta_folder_name) if not trash_data_files else junk_data_path
+ta_graphs_path = join(ta_data_path, graphs_folder_name) if not trash_data_files else junk_graphs_path
 symbols_data_path = join(data_path, symbols_folder_name)
 sp500_symbols_data_path = join(symbols_data_path, sp500_folder_name)

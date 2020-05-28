@@ -1,9 +1,11 @@
 import matplotlib as mpl
 from matplotlib.dates import YearLocator, MonthLocator, DateFormatter
 import pandas as pd
+
 import config
 
 import inspect
+import os
 from os.path import join, exists
 
 
@@ -34,7 +36,7 @@ def reindex(df, backfill=True, start_date=config.start_date, end_date=config.end
         backfill(df)
 
 
-def get_file_path(path, filename, symbol, dated=config.dated, start_date=config.start_date, end_date=config.end_date):
+def get_file_path(path, filename, symbol="", dated=config.dated, start_date=config.start_date, end_date=config.end_date):
     """Returns a file path combining the given data
 
     Parameters:
@@ -51,8 +53,8 @@ def get_file_path(path, filename, symbol, dated=config.dated, start_date=config.
     """
 
     symbol = symbol.upper()
-    start_date = (start_date if isinstance(start_date, str) else start_date.strftime(config.date_format))
-    end_date = (end_date if isinstance(end_date, str) else end_date.strftime(config.date_format))
+    start_date = (start_date.replace("-", "_") if isinstance(start_date, str) else start_date.strftime(config.date_format))
+    end_date = (end_date.replace("-", "_") if isinstance(end_date, str) else end_date.strftime(config.date_format))
     return join(path, symbol + ((start_date + "-" + end_date) if dated else "") + filename)
 
 
@@ -70,6 +72,11 @@ def refresh(path, refresh=False):
             Whether or not to recreate the file at the given path
     """
 
+    # This is required because otherwise, the following will happen:
+    # for refesh=True, plot_ema will call ema with refresh=False and ema will read the stale ma files
+    # or plot_ema will call ema with refresh=True and ema will read from price files and discard the already generated ma
+    if exists(path) and refresh:
+        os.remove(path)
     return not exists(path) or refresh
 
 
@@ -90,7 +97,7 @@ def prettify_ax(ax, title="", center=False, start_date=config.start_date, end_da
     ax.set_xlabel("Date")
     ax.set_ylabel("Price")
     ax.legend()
-    # ax.legend(loc="upper left")
+    # ax.legend(loc="best")
 
     # ax.spines["top"].set_visible(False)
     # ax.spines["right"].set_visible(False)
@@ -119,7 +126,8 @@ def prettify_ax(ax, title="", center=False, start_date=config.start_date, end_da
         max_y = ax.get_ylim()[1].astype(float)
         if abs(min_y) != abs(max_y):
             ax.set_ylim(ymin=-max(abs(min_y), abs(max_y)), ymax=max(abs(min_y), abs(max_y)))
-    # ax.set_xlim(start_date, end_date)  # this is done automatically
+    # TODO: why are my graphs smooshed
+    # ax.set_xlim(start_date, end_date)  # this stops smooshing
 
 
 def prettify_fig(fig, title="", start_date=config.start_date, end_date=config.end_date):
@@ -128,17 +136,18 @@ def prettify_fig(fig, title="", start_date=config.start_date, end_date=config.en
     fig.tight_layout()
 
 
-def debug(s):
-    if config.debug:
-        print(inspect.stack()[1].filename)
+def debug(s, debug=False):
+    if config.debug or debug:
+        print(inspect.stack()[1].filename, flush=True)
+        print("Func: " + inspect.stack()[1].function + " Line: " + str(inspect.stack()[1].lineno), flush=True)
         if isinstance(s, pd.DataFrame) or isinstance(s, pd.Series):
             print(s if config.verbose else s.head(), flush=True)
         elif isinstance(s, mpl.axes.Axes):
+            # Currently I never debug axes instead of debugging figs
             pass
-            # mpl.pyplot.show()
-            # TODO: close the grpah afterwards
-            # TODO: set active axes/figure back to s. Until this is fixed, don't debug graphs
         elif isinstance(s, mpl.pyplot.Figure):
-            mpl.pyplot.show()
+            mpl.pyplot.show(block=False)
+            mpl.pyplot.pause(1)
+            mpl.pyplot.close()
         else:
             print(s, flush=True)
