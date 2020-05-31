@@ -133,6 +133,7 @@ def get_average_price(symbol, method=["Open", "High", "Low", "Close"], backfill=
         dataframe
             A dataframe containing average price by date for the given symbol
     """
+
     if utils.refresh(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol), refresh=refresh):
         download_data_from_yahoo(symbol, backfill=backfill, start_date=start_date, end_date=end_date)
     df = pd.read_csv(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
@@ -164,7 +165,7 @@ def plot_prices(symbol, backfill=False, refresh=False, start_date=config.start_d
         figure, axes
             A subplot containing the prices for the given symbol
     """
-    
+
     if utils.refresh(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol), refresh=refresh):
         download_data_from_yahoo(symbol, backfill=backfill, start_date=start_date, end_date=end_date)
     df = pd.read_csv(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]

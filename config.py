@@ -18,7 +18,7 @@ index = "SPY"
 sp500_yahoo = "^GSPC"
 vix_yahoo = "^VIX"
 test_symbol = "AAPL"
-broken_symbols = ["TT"]
+broken_symbols = ["HWM", "TT"]
 
 # Date range for data, and formatting of dates for saved csvs
 # start_date = datetime.date(2003, 6, 19)  # SPY closed at 100.02 on this date
@@ -34,7 +34,8 @@ date_parser = pandas.to_datetime  # add data_parser = config.data_parser to all 
 figsize = (16, 9)
 scatter_size = 100
 scatter_alpha = 0.7
-matplotlib.rcParams['legend.loc'] = "best"
+alpha = 0.3
+# matplotlib.rcParams['legend.loc'] = "best"
 matplotlib.rc("figure", max_open_warning=0)
 # Probbaly shouldn't use green or red
 matplotlib.rcParams['axes.prop_cycle'] = matplotlib.cycler(color=["blue", "green", "red", "cyan", "magenta"])

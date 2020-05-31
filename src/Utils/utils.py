@@ -111,14 +111,6 @@ def prettify_ax(ax, title="", center=False, start_date=config.start_date, end_da
     ax.get_yaxis().tick_left()
     # ax.tick_params(axis="both", which="both", bottom="off", top="off", labelbottom="on", left="off", right="off", labelleft="on")  # Remove the tick marks
 
-    # TODO: do this for the dates too. Have to get locators, since there are too many ticks
-    min_x = ax.get_xlim()[0].astype(int)
-    max_x = ax.get_xlim()[1].astype(int)
-    #for y in range(ax.get_ylim()[0], ax.get_ylim()[1], 10):
-    for y in ax.get_yticks().astype(float)[1:-1]:  # will the [1:-1] ever result in exceptions?
-        ax.plot(range(min_x, max_x), [y] * len(range(min_x, max_x)), "--", linewidth=0.5, color="black", alpha=0.3)
-
-    # This has to be done last
     if not center and ax.get_ylim()[0] < 0:
         ax.set_ylim(ymin=0)
     if center:
@@ -126,13 +118,24 @@ def prettify_ax(ax, title="", center=False, start_date=config.start_date, end_da
         max_y = ax.get_ylim()[1].astype(float)
         if abs(min_y) != abs(max_y):
             ax.set_ylim(ymin=-max(abs(min_y), abs(max_y)), ymax=max(abs(min_y), abs(max_y)))
-    # TODO: why are my graphs smooshed
-    # ax.set_xlim(start_date, end_date)  # this stops smooshing
+
+    ax.set_xlim(start_date, end_date)  # this stops smooshing
+
+    # TODO: do this for the dates too. Have to get locators, since there are too many ticks
+    min_x = ax.get_xlim()[0].astype(int)
+    max_x = ax.get_xlim()[1].astype(int)
+    #for y in range(ax.get_ylim()[0], ax.get_ylim()[1], 10):
+    for i, y in enumerate(ax.get_yticks().astype(float)[1:-1]):  # will the [1:-1] ever result in exceptions?
+        ax.plot(range(min_x, max_x), [y] * len(range(min_x, max_x)), "--", linewidth=0.5, color="black", alpha=config.alpha)
+
+    if center:
+        ax.plot(range(min_x, max_x), [0] * len(range(min_x, max_x)), "-", linewidth=0.5, color="black")
 
 
 def prettify_fig(fig, title="", start_date=config.start_date, end_date=config.end_date):
     # fig.autofmt_xdate()  # tilts dates
     # fig.set_size_inches(config.figsize)  # currently I always set this when creating the fig
+    # fig.legend(loc="best")
     fig.tight_layout()
 
 
