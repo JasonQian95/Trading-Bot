@@ -14,6 +14,9 @@ class SP500WikiScrapperTest(unittest.TestCase):
     def test_get_sp500_by_subsector(self):
         sp500.get_sp500('Advertising')
 
+    def test_get_removed_sp500(self):
+        sp500.get_removed_sp500(refresh=config.refresh)
+
 
 if __name__ == '__main__':
     unittest.main()

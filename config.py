@@ -3,7 +3,9 @@ import pandas
 
 import datetime
 import warnings
-from os.path import dirname, join
+from os import makedirs
+from os.path import dirname, exists, join
+
 
 # Debug settings
 debug = False
@@ -18,12 +20,12 @@ index = "SPY"
 sp500_yahoo = "^GSPC"
 vix_yahoo = "^VIX"
 test_symbol = "AAPL"
-broken_symbols = ["HWM", "TT"]
+broken_symbols = ["HWM", "TT",  # S&P500
+                  "ANR", "BMC", "CA", "CBE", "CSC", "EP", "GLK", "KG", "JNY", "HNZ", "MEE", "MI", "NYX", "PCL", "PCP", "PTV", "RSH", "SAI", "SBL", "SCG", "SGP", "SLE", "SVU", "TIE", "TRB", "WFR", "XL"]  # Removed from S&P500
 
 # Date range for data, and formatting of dates for saved csvs
-# start_date = datetime.date(2003, 6, 19)  # SPY closed at 100.02 on this date
-start_date = datetime.date(2005, 1, 1)
-end_date = datetime.date.today()
+start_date = datetime.date(2005, 1, 1)  # start_date = datetime.date(2003, 6, 19)  # SPY closed at 100.02 on this date
+end_date = datetime.date(2020, 5, 31)  # end_date = datetime.date.today()
 date_format = "%Y_%m_%d"
 
 # pandas settings
@@ -35,10 +37,14 @@ figsize = (16, 9)
 scatter_size = 100
 scatter_alpha = 0.7
 alpha = 0.3
-# matplotlib.rcParams['legend.loc'] = "best"
-matplotlib.rc("figure", max_open_warning=0)
+matplotlib.rcParams["figure.max_open_warning"] = 0  # matplotlib.rc("figure", max_open_warning=0)
+'''
+matplotlib.rcParams["legend.loc"] = "upper left"  # matplotlib.rc("legend", loc="upper left")
+matplotlib.pyplot.rcParams["legend.fontsize"] = "small"  # matplotlib.pyplot.rc("legend", fontsize="small")
+matplotlib.pyplot.rcParams["legend.labelspacing"] = 0.2  # matplotlib.pyplot.rc("legend", labelspacing=0.2)
+'''
 # Probbaly shouldn't use green or red
-matplotlib.rcParams['axes.prop_cycle'] = matplotlib.cycler(color=["blue", "green", "red", "cyan", "magenta"])
+matplotlib.rcParams['axes.prop_cycle'] = matplotlib.cycler(color=["blue", "green", "red", "cyan", "magenta", "yellow"])
 # These are the "Tableau 20" colors as RGB. Curently unused
 tableau20 = [(31, 119, 180), (174, 199, 232), (255, 127, 14), (255, 187, 120),
              (44, 160, 44), (152, 223, 138), (214, 39, 40), (255, 152, 150),
@@ -79,3 +85,9 @@ ta_data_path = join(data_path, ta_folder_name) if not trash_data_files else junk
 ta_graphs_path = join(ta_data_path, graphs_folder_name) if not trash_data_files else junk_graphs_path
 symbols_data_path = join(data_path, symbols_folder_name)
 sp500_symbols_data_path = join(symbols_data_path, sp500_folder_name)
+
+paths = [data_path, junk_data_path, junk_graphs_path, prices_data_path, prices_graphs_path, simulation_data_path, simulation_graphs_path, ta_data_path, ta_graphs_path, symbols_data_path, sp500_symbols_data_path]
+
+for path in paths:
+    if not exists(path):
+        makedirs(path)

@@ -8,9 +8,8 @@ import utils
 
 from pandas_datareader._utils import RemoteDataError
 
-price_name = "Price"
-price_table_filename = price_name + ".csv"
-price_graph_filename = price_name + ".png"
+price_table_filename = "Price.csv"
+price_graph_filename = "Price.png"
 daily_return_name = "DailyReturn"
 daily_return_table_filename = daily_return_name + ".csv"
 daily_return_graph_filename = daily_return_name + ".png"
@@ -171,8 +170,37 @@ def plot_prices(symbol, backfill=False, refresh=False, start_date=config.start_d
     df = pd.read_csv(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
 
     fig, ax = plt.subplots(figsize=config.figsize)
-    ax.plot(df.index, df["Close"], label=symbol + price_name)
-    utils.prettify_ax(ax, title=symbol + price_name, start_date=start_date, end_date=end_date)
+    ax.plot(df.index, df["Close"], label=symbol + "Price")
+    utils.prettify_ax(ax, title=symbol + "Price", start_date=start_date, end_date=end_date)
+
+    utils.prettify_fig(fig)
+    fig.savefig(utils.get_file_path(config.prices_graphs_path, price_graph_filename, symbol=symbol))
+    utils.debug(fig)
+    return fig, ax
+
+
+def plot_percentage_gains(symbol, backfill=False, refresh=False, start_date=config.start_date, end_date=config.end_date):
+    """Plots a graph of the percentage gains for the given symbol
+
+    Parameters:
+        symbol : str
+        backfill : bool, optional
+        refresh : bool, optional
+        start_date : date, optional
+        end_date : date, optional
+
+    Returns:
+        figure, axes
+            A subplot containing the percentage gains for the given symbol
+    """
+
+    if utils.refresh(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol), refresh=refresh):
+        download_data_from_yahoo(symbol, backfill=backfill, start_date=start_date, end_date=end_date)
+    df = pd.read_csv(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
+
+    fig, ax = plt.subplots(figsize=config.figsize)
+    ax.plot(df.index, df["Close"] / df["Close"][0], label=symbol + "Price")
+    utils.prettify_ax(ax, title=symbol + "Price", center=True, start_date=start_date, end_date=end_date)
 
     utils.prettify_fig(fig)
     fig.savefig(utils.get_file_path(config.prices_graphs_path, price_graph_filename, symbol=symbol))
@@ -214,8 +242,8 @@ def get_daily_return(symbol, backfill=False, refresh=False, start_date=config.st
     if utils.refresh(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=config.vix_yahoo), refresh=refresh):
         download_data_from_yahoo(config.vix_yahoo, backfill=backfill, start_date=start_date, end_date=end_date)
     vix_df = pd.read_csv(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=config.vix_yahoo), index_col="Date", parse_dates=["Date"])[start_date:end_date]
-    ax[1].plot(vix_df.index, vix_df["Close"], label=config.vix_yahoo + price_name)
-    utils.prettify_ax(ax[1], title=config.vix_yahoo + price_name, start_date=start_date, end_date=end_date)
+    ax[1].plot(vix_df.index, vix_df["Close"], label=config.vix_yahoo + "Price")
+    utils.prettify_ax(ax[1], title=config.vix_yahoo + "Price", start_date=start_date, end_date=end_date)
 
     utils.prettify_fig(fig)
     fig.savefig(utils.get_file_path(config.prices_graphs_path, daily_return_graph_filename, symbol=symbol))
@@ -358,8 +386,8 @@ def get_daily_return_flex(symbol, func=["daily", "after_hours", "during_hours"],
     if utils.refresh(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=config.vix_yahoo), refresh=refresh):
         download_data_from_yahoo(config.vix_yahoo, backfill=backfill, start_date=start_date, end_date=end_date)
     vix_df = pd.read_csv(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=config.vix_yahoo), index_col="Date", parse_dates=["Date"])[start_date:end_date]
-    ax[-1].plot(vix_df.index, vix_df["Close"], label=config.vix_yahoo + price_name)
-    utils.prettify_ax(ax[-1], title=config.vix_yahoo + price_name, start_date=start_date, end_date=end_date)
+    ax[-1].plot(vix_df.index, vix_df["Close"], label=config.vix_yahoo + "Price")
+    utils.prettify_ax(ax[-1], title=config.vix_yahoo + "Price", start_date=start_date, end_date=end_date)
 
     utils.prettify_fig(fig)
     fig.savefig(utils.get_file_path(config.prices_graphs_path, ("-".join(str(c) for c in used_columns)), symbol=symbol))
@@ -425,5 +453,3 @@ def after_during_hours_returns(symbol, period=0, backfill=False, refresh=False, 
     fig.savefig(utils.get_file_path(config.prices_graphs_path, during_and_after_hours_graph_filename, symbol=symbol, dated=True, start_date=start_date, end_date=end_date))
     utils.debug(fig)
     return df[[total_after_hours_column_name, total_after_hours_column_name]]
-
-# symbols should be all caps

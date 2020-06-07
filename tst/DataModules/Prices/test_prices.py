@@ -34,6 +34,11 @@ class PricesTest(unittest.TestCase):
     def test_plot_prices_index(self):
         p.plot_prices(config.index, refresh=config.refresh)
 
+    def test_plot_percentage_gains_index(self):
+        if config.skip_test:
+            self.skipTest("Too many files generated")
+        p.plot_percentage_gains(config.index, refresh=config.refresh)
+
     def test_get_daily_return_index(self):
         if config.skip_test:
             self.skipTest("Too many files generated")

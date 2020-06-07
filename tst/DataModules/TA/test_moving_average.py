@@ -22,10 +22,10 @@ class MovingAverageTest(unittest.TestCase):
         ma.plot_ema(config.index, refresh=config.refresh)
 
     def test_generate_signals_sma_index(self):
-        ma.generate_signals(config.index, ma_type=ma.sma_name, refresh=config.refresh)
+        ma.generate_sma_signals(config.index, refresh=config.refresh)
 
     def test_generate_signals_ema_index(self):
-        ma.generate_signals(config.index, ma_type=ma.ema_name, refresh=config.refresh)
+        ma.generate_ema_signals(config.index, refresh=config.refresh)
 
     def test_plot_macd_index(self):
         ma.plot_macd(config.index, refresh=config.refresh)

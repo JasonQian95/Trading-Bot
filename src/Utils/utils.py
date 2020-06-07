@@ -12,7 +12,7 @@ from os.path import join, exists
 def backfill(df):
     """Fills in the null values in the dataframe. The fill method is "ffill"
     Parameters:
-        df : dataframe
+        df : dataframe, series
     """
 
     debug(df.isna().sum())
@@ -20,6 +20,7 @@ def backfill(df):
     df.fillna(method="ffill", inplace=True)
 
 
+'''
 # Untested, don't think I'd ever need this with Yahoo's data
 def reindex(df, backfill=True, start_date=config.start_date, end_date=config.end_date):
     """Reindexes the dataframe for all weekdays, by default leaving the inserted values null
@@ -34,6 +35,7 @@ def reindex(df, backfill=True, start_date=config.start_date, end_date=config.end
     df.reindex(weekdays, inplace=True)
     if backfill:
         backfill(df)
+'''
 
 
 def get_file_path(path, filename, symbol="", dated=config.dated, start_date=config.start_date, end_date=config.end_date):
@@ -52,7 +54,7 @@ def get_file_path(path, filename, symbol="", dated=config.dated, start_date=conf
             A file path combining the given data
     """
 
-    symbol = symbol.upper()
+    # symbol = symbol.upper()
     start_date = (start_date.replace("-", "_") if isinstance(start_date, str) else start_date.strftime(config.date_format))
     end_date = (end_date.replace("-", "_") if isinstance(end_date, str) else end_date.strftime(config.date_format))
     return join(path, symbol + ((start_date + "-" + end_date) if dated else "") + filename)
@@ -96,8 +98,8 @@ def prettify_ax(ax, title="", center=False, start_date=config.start_date, end_da
         ax.set_title(title)
     ax.set_xlabel("Date")
     ax.set_ylabel("Price")
-    ax.legend()
-    # ax.legend(loc="best")
+    ax.legend(loc="upper left", fontsize="small", labelspacing=0.2)
+
 
     # ax.spines["top"].set_visible(False)
     # ax.spines["right"].set_visible(False)
@@ -111,6 +113,13 @@ def prettify_ax(ax, title="", center=False, start_date=config.start_date, end_da
     ax.get_yaxis().tick_left()
     # ax.tick_params(axis="both", which="both", bottom="off", top="off", labelbottom="on", left="off", right="off", labelleft="on")  # Remove the tick marks
 
+    # TODO: what causes smooshing
+    # ax.set_xlim(start_date, end_date)  # this stops smooshing
+    ax.margins(x=0)
+
+    min_x = ax.get_xlim()[0].astype(int)
+    max_x = ax.get_xlim()[1].astype(int)
+
     if not center and ax.get_ylim()[0] < 0:
         ax.set_ylim(ymin=0)
     if center:
@@ -118,18 +127,12 @@ def prettify_ax(ax, title="", center=False, start_date=config.start_date, end_da
         max_y = ax.get_ylim()[1].astype(float)
         if abs(min_y) != abs(max_y):
             ax.set_ylim(ymin=-max(abs(min_y), abs(max_y)), ymax=max(abs(min_y), abs(max_y)))
-
-    ax.set_xlim(start_date, end_date)  # this stops smooshing
+        ax.plot(range(min_x, max_x), [0] * len(range(min_x, max_x)), "-", linewidth=0.5, color="black")
 
     # TODO: do this for the dates too. Have to get locators, since there are too many ticks
-    min_x = ax.get_xlim()[0].astype(int)
-    max_x = ax.get_xlim()[1].astype(int)
-    #for y in range(ax.get_ylim()[0], ax.get_ylim()[1], 10):
-    for i, y in enumerate(ax.get_yticks().astype(float)[1:-1]):  # will the [1:-1] ever result in exceptions?
+    # for y in range(ax.get_ylim()[0], ax.get_ylim()[1], 10):
+    for i, y in enumerate(ax.get_yticks().astype(float)[1:-1]):
         ax.plot(range(min_x, max_x), [y] * len(range(min_x, max_x)), "--", linewidth=0.5, color="black", alpha=config.alpha)
-
-    if center:
-        ax.plot(range(min_x, max_x), [0] * len(range(min_x, max_x)), "-", linewidth=0.5, color="black")
 
 
 def prettify_fig(fig, title="", start_date=config.start_date, end_date=config.end_date):

@@ -6,9 +6,11 @@ sp500_full_table_filename = "FullTable.csv"
 sp500_symbols_table_filename = "Symbols.csv"
 sp500_full_table_path = utils.get_file_path(config.sp500_symbols_data_path, sp500_full_table_filename, "SP500")
 sp500_symbols_table_path = utils.get_file_path(config.sp500_symbols_data_path, sp500_symbols_table_filename, "SP500")
+sp500_removed_symbols_table_path = utils.get_file_path(config.sp500_symbols_data_path, sp500_symbols_table_filename, "SP500Removed")
 
 # Wikipedia table column names
 symbol_column_name = "Symbol"
+removed_symbol_column_name = "Ticker"
 sector_column_name = "GICS Sector"
 sub_sector_column_name = "GICS Sub Industry"
 
@@ -21,10 +23,9 @@ def download_sp500():
     df = table[0]
     # df = df.rename(columns=df.iloc[0]).drop(df.index[0])
     # df = table[0][1:].rename(columns=table[0].iloc[0])
-    df = df[df["Symbol"] not in config.broken_symbols]  # fix for TT
-    df["Symbol"] = df["Symbol"].str.replace(".", "-")  # fix for BRK.B and BF.B
-    utils.debug(df)
     df.to_csv(sp500_full_table_path, index=False)
+    df[symbol_column_name] = df[symbol_column_name].str.replace(".", "-")
+    utils.debug(df)
     df.to_csv(sp500_symbols_table_path, columns=[symbol_column_name], index=False)
 
 
@@ -42,6 +43,7 @@ def get_sp500(refresh=False):
     if utils.refresh(sp500_symbols_table_path, refresh=refresh):
         download_sp500()
     df = pd.read_csv(sp500_symbols_table_path)
+    df = df[~df[symbol_column_name].isin(config.broken_symbols)]
     utils.debug(df[symbol_column_name])
     return df[symbol_column_name].tolist()
 
@@ -120,3 +122,34 @@ def get_all_sp500_sub_sectors():
         download_sp500()
     df = pd.read_csv(sp500_full_table_path, usecols=[sub_sector_column_name])
     return sorted(df[sub_sector_column_name].unique())
+
+
+def download_removed_sp500():
+    """Generates a csv file containing a list of symbols of securities removed from the S&P500 table from Wikipedia
+    """
+
+    table = pd.read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
+    df = table[1]["Removed"]
+    df[symbol_column_name] = df[removed_symbol_column_name].str.replace(".", "-")
+    df = df[df[symbol_column_name].notna()]
+    utils.debug(df)
+    df.to_csv(sp500_removed_symbols_table_path, columns=[symbol_column_name], index=False)
+
+
+def get_removed_sp500(refresh=False):
+    """Returns a list of symbols removed from the SP500
+
+    Parameters:
+        refresh : bool, optional
+
+    Returns:
+        list of str
+            A list of symbols removed from the SP500
+    """
+
+    if utils.refresh(sp500_removed_symbols_table_path, refresh=refresh):
+        download_removed_sp500()
+    df = pd.read_csv(sp500_removed_symbols_table_path)
+    df = df[~df[symbol_column_name].isin(config.broken_symbols)]
+    utils.debug(df[symbol_column_name])
+    return df[symbol_column_name].tolist()
