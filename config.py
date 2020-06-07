@@ -20,7 +20,7 @@ index = "SPY"
 sp500_yahoo = "^GSPC"
 vix_yahoo = "^VIX"
 test_symbol = "AAPL"
-broken_symbols = ["HWM", "TT",  # S&P500
+broken_symbols = ["HWM", "TT", "VIAC",  # S&P500
                   "ANR", "BMC", "CA", "CBE", "CSC", "EP", "GLK", "KG", "JNY", "HNZ", "MEE", "MI", "NYX", "PCL", "PCP", "PTV", "RSH", "SAI", "SBL", "SCG", "SGP", "SLE", "SVU", "TIE", "TRB", "WFR", "XL"]  # Removed from S&P500
 
 # Date range for data, and formatting of dates for saved csvs
@@ -38,11 +38,6 @@ scatter_size = 100
 scatter_alpha = 0.7
 alpha = 0.3
 matplotlib.rcParams["figure.max_open_warning"] = 0  # matplotlib.rc("figure", max_open_warning=0)
-'''
-matplotlib.rcParams["legend.loc"] = "upper left"  # matplotlib.rc("legend", loc="upper left")
-matplotlib.pyplot.rcParams["legend.fontsize"] = "small"  # matplotlib.pyplot.rc("legend", fontsize="small")
-matplotlib.pyplot.rcParams["legend.labelspacing"] = 0.2  # matplotlib.pyplot.rc("legend", labelspacing=0.2)
-'''
 # Probbaly shouldn't use green or red
 matplotlib.rcParams['axes.prop_cycle'] = matplotlib.cycler(color=["blue", "green", "red", "cyan", "magenta", "yellow"])
 # These are the "Tableau 20" colors as RGB. Curently unused

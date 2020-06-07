@@ -2,9 +2,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-import moving_average as ma
+import ema
+import macd
+import rsi
+import sma
+
 import prices
-import relative_strength_index as rsi
 import sp500_wiki_scrapper as sp
 import config
 import utils
@@ -95,14 +98,17 @@ class Simulation:
         self.dates = pd.read_csv(utils.get_file_path(config.simulation_data_path, dates_table_filename), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date].index
         self.log = pd.DataFrame(index=self.dates, columns=log_columns)
         self.log[actions_column_name] = ""
-        self.signal_table_filename = inspect.getmodule(signal_func).table_filename
+        self.signal_table_filename = inspect.getmodule(self.signal_func).table_filename
         # TODO make this work for multiple signals
         '''
+        self.signal_names = []
         self.signal_table_filename = []
         for func in signal_func:
+            self.signal_name.append(inspect.getmodule(func).signal_name)
             self.signal_table_filename.append(inspect.getmodule(func).table_filename)
         '''
 
+        # self.get_price_on_date.cache_clear()
         self.run(self.signal_func, signal_func_args, signal_func_kwargs)
 
     def buy(self, symbol, date, purchase_size, partial_shares=False):
@@ -126,10 +132,10 @@ class Simulation:
             # TODO: buy at close price, or next day's open price?
             shares = (purchase_size // self.get_price_on_date(symbol, date, time="Close")) if not partial_shares else (purchase_size / self.get_price_on_date(symbol, date, time="Close"))
             if shares < 0:
-                return
                 # TODO: Sometimes shares is -1. When variables are printed, math does not add up to -1??
                 # Symbol SLB self.purchase_size 5000 Purchase size -1.7605099999366214 Price 39.79 shares -1.0
                 print("Symbol {} self.purchase_size {} Purchase size {} Price {} Shares {}".format(symbol, self.purchase_size, purchase_size, self.get_price_on_date(symbol, date, time="Close"), shares), flush=True)
+                # raise Exception
             if shares != 0:
                 self.portfolio[symbol] = shares
                 self.cash -= shares * self.get_price_on_date(symbol, date, time="Close")
@@ -158,7 +164,7 @@ class Simulation:
                 self.cash += self.portfolio[symbol] * self.get_price_on_date(symbol, date)
                 self.cash -= self.calculate_commission(self.portfolio[symbol])
                 self.log.loc[date][actions_column_name] = self.log.loc[date][actions_column_name] + "{} {} {} Shares at {} totalling {:.2f} ".format(ta.sell_signal, symbol, self.portfolio[symbol], self.get_price_on_date(symbol, date), self.portfolio[symbol] * self.get_price_on_date(symbol, date))
-                self.portfolio.pop(symbol)  # TODO set a breakpoint here and check if it works. Also replace it with remove()
+                self.portfolio.pop(symbol)
             else:
                 shares = (amount // self.get_price_on_date(symbol, date)) if not partial_shares else (amount / self.get_price_on_date(symbol, date))
                 shares = shares if shares < self.portfolio[symbol] else self.portfolio[symbol]
@@ -221,7 +227,7 @@ class Simulation:
             df = self.price_files[symbol]
         else:
             if utils.refresh(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), refresh=False):
-                prices.download_data_from_yahoo(symbol, backfill=False, start_date=self.start_date, end_date=self.end_date)
+                prices.download_data_from_yahoo(symbol, start_date=self.start_date, end_date=self.end_date)
             df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date]
             self.price_files[symbol] = df
 
@@ -248,7 +254,7 @@ class Simulation:
             df = self.price_files[symbol]
         else:
             if utils.refresh(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), refresh=False):
-                prices.download_data_from_yahoo(symbol, backfill=False, start_date=self.start_date, end_date=self.end_date)
+                prices.download_data_from_yahoo(symbol, start_date=self.start_date, end_date=self.end_date)
             df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date]
             self.price_files[symbol] = df
 
@@ -274,12 +280,6 @@ class Simulation:
 
         total_value = self.cash
         for position in self.portfolio:
-            if date.to_pydatetime().date() == datetime.date(2018, 10, 24):
-                print(total_value)
-                print(position)
-                print(self.portfolio[position])
-                print(self.get_price_on_date(position, date, time="Close"))
-                print("---")
             total_value += self.portfolio[position] * self.get_price_on_date(position, date, time="Close")
         return total_value
 
@@ -296,7 +296,7 @@ class Simulation:
             max_portfolio_size = self.max_portfolio_size
         self.purchase_size = ((self.total_value(date) // min(max_portfolio_size, len(self.symbols) // 5 + 1)) if purchase_size == 0 else purchase_size) - (self.commission[maximum_commission] if maximum_commission in self.commission else 0)
 
-    def generate_signals(self, symbols=None, refresh=None, start_date=None, end_date=None, signal_func=None, signal_func_args=[], signal_func_kwargs=[]):
+    def generate_signals(self, symbols=None, refresh=None, start_date=None, end_date=None, signal_func=None, signal_func_args=[], signal_func_kwargs={}):
         """Generates signals for the given symbol
 
         Parameters:
@@ -327,8 +327,7 @@ class Simulation:
         for symbol in symbols:
             print("Generating signals for " + symbol, flush=True)
             try:
-                # TODO this must be run if signal_func has changed, but can be skipped if it hasn't
-                signal_func(symbol, *signal_func_args, **signal_func_kwargs, refresh=refresh, start_date=start_date, end_date=end_date)
+                signal_func(symbol, *signal_func_args, **signal_func_kwargs, plot=False, refresh=refresh, start_date=start_date, end_date=end_date)
                 # TODO make this work for multiple signal funcs, this will require backfill=True
                 '''
                 for i, func in enumerate(signal_func):
@@ -363,9 +362,9 @@ class Simulation:
             try:
                 df = pd.read_csv(utils.get_file_path(config.ta_data_path, self.signal_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date]
                 self.signal_files[symbol] = df
-            except FileNotFoundError:
-                # TODO This happens when start_date is too recent to generate data, but why are no files generated?
-                print("No signals found for " + symbol)
+            except FileNotFoundError:  # pd.errors.EmptyDataError
+                # When start_date is too recent to generate data, no files are generated
+                print("No signals found for {} {}".format(symbol, inspect.getmodule(self.signal_func)))
                 self.symbols.remove(symbol)
                 self.times[read_signals_time] = self.times[read_signals_time] + timer() - start_time
                 return ta.default_signal
@@ -373,8 +372,10 @@ class Simulation:
         signal = df.loc[date][ta.signal_name] if date in df.index else ta.default_signal
         # TODO make this work for multiple signals
         '''
-        for signal_name in signal_names:
-            signal = df.loc[date][ta.signal_name] if date in df.index else ta.default_signal
+        signal = df.loc[date][self.signal_names[0]] if date in df.index else ta.default_signal
+        for signal_name in self.signal_names:
+            if signal != df.loc[date][signal_name] if date in df.index else ta.default_signal:
+                signal = ta.default_signal
         '''
         self.times[read_signals_time] = self.times[read_signals_time] + timer() - start_time
         return signal
@@ -399,7 +400,6 @@ class Simulation:
         # Benchmark performance
         for bench in benchmark:
             df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=bench), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date]
-            # TODO: replace this with a call to prices.plot_prices?
             ax[1][0].plot(df.index, df["Close"], label=bench + "Price")
         utils.prettify_ax(ax[1][0], title="Benchmarks", start_date=self.start_date, end_date=self.end_date)
 
@@ -407,7 +407,6 @@ class Simulation:
         ax[0][1].plot(log.index, (log[portfolio_value_column_name] / log[portfolio_value_column_name][0]), label="Portfolio")
         for bench in benchmark:
             df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=bench), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date]
-            # TODO: replace this with a call to prices.plot_percentage_gains?
             ax[0][1].plot(df.index, (df["Close"] / df["Close"][0]), label=bench)
             if len(benchmark) > 1:
                 ax[0][1].plot(df.index, (log[portfolio_value_column_name] / log[portfolio_value_column_name][0]) / (df["Close"] / df["Close"][0]), label="PortfolioVS" + bench)
@@ -431,7 +430,6 @@ class Simulation:
             for symbol in self.symbols:
                 df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date]
                 # ax[1][1].plot(df.index, (log[log.index in df.index][total_value_column_name] / log[log.index in df.index][cash_column_name][0]) / (df["Close"] / df["Close"][0]), label="PortfolioVS" + symbol)
-                # TODO: replace this with a call to prices.plot_percentage_gains?
                 ax[1][1].plot(df.index, df["Close"] / df["Close"][0], label=symbol)
             utils.prettify_ax(ax[1][1], title="PortfolioVSSymbols", start_date=self.start_date, end_date=self.end_date)
 
@@ -446,7 +444,7 @@ class Simulation:
             ax[1][1].plot(avg_return.index, avg_return, label="AverageReturnOfSymbols")
             utils.prettify_ax(ax[1][1], title="AverageReturnOfSymbols", start_date=self.start_date, end_date=self.end_date)
 
-        utils.prettify_fig(fig)
+        utils.prettify_fig(fig, title=self.filename)
         fig.savefig(utils.get_file_path(config.simulation_graphs_path, self.filename + simulation_graph_filename))
         utils.debug(fig)
 
@@ -459,14 +457,14 @@ class Simulation:
         for symbol in self.symbols:
             try:
                 if utils.refresh(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), refresh=self.refresh):
-                    prices.download_data_from_yahoo(symbol, backfill=False, start_date=self.start_date, end_date=self.end_date)
+                    prices.download_data_from_yahoo(symbol, start_date=self.start_date, end_date=self.end_date)
             except RemoteDataError:
                 print("Invalid symbol: " + symbol)
                 self.symbols.remove(symbol)
         for bench in self.benchmark:
             try:
                 if utils.refresh(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=bench), refresh=self.refresh):
-                    prices.download_data_from_yahoo(bench, backfill=False, start_date=self.start_date, end_date=self.end_date)
+                    prices.download_data_from_yahoo(bench, start_date=self.start_date, end_date=self.end_date)
             except RemoteDataError:
                 print("Invalid symbol: " + bench)
                 self.symbols.remove(bench)
@@ -510,7 +508,6 @@ class Simulation:
             if self.fail_gracefully:
                 print(e)
                 self.log = self.log.loc[self.log[self.log.index] < date]
-                # self.log = self.log[:self.log.index.get_loc(date) - 1]
             else:
                 raise
 
@@ -532,9 +529,7 @@ class Simulation:
         self.log.to_csv(utils.get_file_path(config.simulation_data_path, self.filename + simulation_table_filename))
         self.log = self.log.loc[self.log[actions_column_name] != ""]  # self.log.dropna(subset=[actions_column_name], inplace=True)
         self.log.to_csv(utils.get_file_path(config.simulation_data_path, self.filename + simulation_actions_only_table_filename))
-        # TODO: HACK: why are these persisting
-        start_time = timer()
-        self.get_price_on_date.cache_clear()
+
     # Functions for logging
 
     def portfolio_value(self, date):
@@ -572,48 +567,44 @@ def update_dates_file(start_date=config.start_date, end_date=config.end_date):
 
 if __name__ == '__main__':
     '''
-    Simulation(symbols=["SPY"],
-               refresh=False, filename="SPYEMA50-200",
-               signal_func=ma.generate_ema_signals, signal_func_kwargs={"period": [50, 200]})
-    '''
-    Simulation(symbols=["MSFT", "GOOG", "FB", "AAPL", "AMZN"],
-               refresh=False, filename="BigNEMA50-200",
-               signal_func=ma.generate_ema_signals, signal_func_kwargs={"period": [50, 200]})
-    '''
     Simulation(symbols=sp.get_sp500(),
                refresh=False, filename="SP500EMA20-50", max_portfolio_size=100,
-               signal_func=ma.generate_ema_signals, signal_func_kwargs={"period": [20, 50]})
+               signal_func=ema.generate_signals, signal_func_kwargs={"period": [20, 50]})
     Simulation(symbols=sp.get_sp500(),
                refresh=False, filename="SP500EMA20-200", max_portfolio_size=100,
-               signal_func=ma.generate_ema_signals, signal_func_kwargs={"period": [20, 200]})
+               signal_func=ema.generate_signals, signal_func_kwargs={"period": [20, 200]})
     # This is the 'benchmark'/'default'
     Simulation(symbols=sp.get_sp500(),
                refresh=False, filename="SP500EMA50-200", max_portfolio_size=100,
-               signal_func=ma.generate_ema_signals, signal_func_kwargs={"period": [50, 200]})
+               signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
     Simulation(symbols=sp.get_sp500(),
                refresh=False, filename="SP500EMA50-200SoftSignals", max_portfolio_size=100, soft_signals=True,
-               signal_func=ma.generate_ema_signals, signal_func_kwargs={"period": [50, 200]})
-    Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500EMA50-200PortSize20", max_portfolio_size=20,
-               signal_func=ma.generate_ema_signals, signal_func_kwargs={"period": [50, 200]})
-    '''
+               signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
     Simulation(symbols=sp.get_removed_sp500(),
                refresh=False, filename="RemovedSP500EMA50-200", max_portfolio_size=100,
-               signal_func=ma.generate_ema_signals, signal_func_kwargs={"period": [50, 200]})
+               signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
+    Simulation(symbols=sp.get_sp500() + sp.get_removed_sp500(),
+               refresh=False, filename="RemovedSP500EMA50-200", max_portfolio_size=100,
+               signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
     Simulation(symbols=sp.get_sp500(),
                refresh=False, filename="SP500SMA50-200", max_portfolio_size=100,
-               signal_func=ma.generate_sma_signals, signal_func_kwargs={"period": [50, 200]})
-    '''
+               signal_func=sma.generate_signals, signal_func_kwargs={"period": [50, 200]})
     Simulation(symbols=sp.get_sp500(),
                refresh=False, filename="SP500MACD", max_portfolio_size=100,
-               signal_func=ma.generate_macd_signals, signal_func_kwargs={"period": ma.default_macd_periods})
-    '''
+               signal_func=macd.generate_signals, signal_func_kwargs={"period": ema.default_periods})
     Simulation(symbols=sp.get_sp500(),
                refresh=False, filename="SP500RSI14", max_portfolio_size=100,
-               signal_func=rsi.generate_rsi_signals, signal_func_kwargs={"period": rsi.default_rsi_period})
-
-
-
+               signal_func=rsi.generate_signals, signal_func_kwargs={"period": rsi.default_period})
+    Simulation(symbols=["SPY"],
+               refresh=False, filename="SPYEMA50-200",
+               signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
+    Simulation(symbols=["MSFT", "GOOG", "FB", "AAPL", "AMZN"],
+               refresh=False, filename="BigNEMA50-200",
+               signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
+    '''
+    Simulation(symbols=sp.get_sp500() + sp.get_removed_sp500(),
+           refresh=False, filename="RemovedSP500EMA50-200", max_portfolio_size=100,
+           signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
 
 # TODO Thread this
 # number of shares to buy is calculated before commission. Commission can then push cash into negatives

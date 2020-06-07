@@ -1,5 +1,6 @@
 import matplotlib as mpl
 from matplotlib.dates import YearLocator, MonthLocator, DateFormatter
+import numpy as np
 import pandas as pd
 
 import config
@@ -9,15 +10,16 @@ import os
 from os.path import join, exists
 
 
-def backfill(df):
+def backfill(df, limit=None):
     """Fills in the null values in the dataframe. The fill method is "ffill"
     Parameters:
         df : dataframe, series
+        limit : int, optional
     """
 
     debug(df.isna().sum())
     debug(df[df.isna().any(axis=1)])
-    df.fillna(method="ffill", inplace=True)
+    df.fillna(method="ffill", limit=limit, inplace=True)
 
 
 '''
@@ -82,7 +84,7 @@ def refresh(path, refresh=False):
     return not exists(path) or refresh
 
 
-def prettify_ax(ax, title="", center=False, start_date=config.start_date, end_date=config.end_date):
+def prettify_ax(ax, title="", center=False, percentage=False, start_date=config.start_date, end_date=config.end_date):
     """Makes matplotlib.pyplot.Axes look pretty
 
     Parameters:
@@ -99,7 +101,11 @@ def prettify_ax(ax, title="", center=False, start_date=config.start_date, end_da
     ax.set_xlabel("Date")
     ax.set_ylabel("Price")
     ax.legend(loc="upper left", fontsize="small", labelspacing=0.2)
-
+    '''
+    matplotlib.rcParams["legend.loc"] = "upper left"  # matplotlib.rc("legend", loc="upper left")
+    matplotlib.pyplot.rcParams["legend.fontsize"] = "small"  # matplotlib.pyplot.rc("legend", fontsize="small")
+    matplotlib.pyplot.rcParams["legend.labelspacing"] = 0.2  # matplotlib.pyplot.rc("legend", labelspacing=0.2)
+    '''
 
     # ax.spines["top"].set_visible(False)
     # ax.spines["right"].set_visible(False)
@@ -128,6 +134,10 @@ def prettify_ax(ax, title="", center=False, start_date=config.start_date, end_da
         if abs(min_y) != abs(max_y):
             ax.set_ylim(ymin=-max(abs(min_y), abs(max_y)), ymax=max(abs(min_y), abs(max_y)))
         ax.plot(range(min_x, max_x), [0] * len(range(min_x, max_x)), "-", linewidth=0.5, color="black")
+    if percentage:
+        ax.set_ylim(ymin=0, ymax=100)
+        # ax.yaxis.set_ticks(np.arange(0, 100, 10))
+        # ax.set_yticks([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
 
     # TODO: do this for the dates too. Have to get locators, since there are too many ticks
     # for y in range(ax.get_ylim()[0], ax.get_ylim()[1], 10):
@@ -137,8 +147,8 @@ def prettify_ax(ax, title="", center=False, start_date=config.start_date, end_da
 
 def prettify_fig(fig, title="", start_date=config.start_date, end_date=config.end_date):
     # fig.autofmt_xdate()  # tilts dates
-    # fig.set_size_inches(config.figsize)  # currently I always set this when creating the fig
-    # fig.legend(loc="best")
+    fig.set_size_inches(config.figsize)  # currently I always set this when creating the fig
+    fig.suptitle(title)
     fig.tight_layout()
 
 

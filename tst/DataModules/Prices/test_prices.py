@@ -34,11 +34,16 @@ class PricesTest(unittest.TestCase):
     def test_plot_prices_index(self):
         p.plot_prices(config.index, refresh=config.refresh)
 
+    def test_plot_prices_mult_symbol(self):
+        p.plot_prices([config.index, config.sp500_yahoo, config.vix_yahoo], refresh=config.refresh)
+
     def test_plot_percentage_gains_index(self):
-        if config.skip_test:
-            self.skipTest("Too many files generated")
         p.plot_percentage_gains(config.index, refresh=config.refresh)
 
+    def test_plot_percentage_gains_mult_symbol(self):
+        p.plot_percentage_gains([config.index, config.sp500_yahoo, config.vix_yahoo], refresh=config.refresh)
+
+    '''
     def test_get_daily_return_index(self):
         if config.skip_test:
             self.skipTest("Too many files generated")
@@ -53,8 +58,14 @@ class PricesTest(unittest.TestCase):
         if config.skip_test:
             self.skipTest("Too many files generated")
         p.get_during_hours_daily_return(config.index, refresh=config.refresh)
+    '''
 
-    def test_get_daily_return_flex(self):
+    def test_get_daily_return_daily(self):
+        if config.skip_test:
+            self.skipTest("Too many files generated")
+        p.get_daily_return_flex(config.index, func="daily", refresh=config.refresh)
+
+    def test_get_daily_return_all(self):
         if config.skip_test:
             self.skipTest("Too many files generated")
         p.get_daily_return_flex(config.index, refresh=config.refresh)
@@ -70,15 +81,17 @@ class PricesTest(unittest.TestCase):
         p.after_during_hours_returns(config.index, start_date="2006-1-1", end_date="2012-1-1")
 
 
+if __name__ == '__main__':
+    unittest.main()
+    # I'd like tests to run in sequential order. Unnessecary for passing tests, but I would like the final data files even when refresh=True
+    # unittest.TestLoader.sortTestMethodsUsing = None  # This supposed to work but it seems the api is broken
+
+# This doesn't work
+'''
 class SequentialTestLoader(unittest.TestLoader):
     def getTestCaseNames(self, testCaseClass):
         test_names = super().getTestCaseNames(testCaseClass)
         testcase_methods = list(testCaseClass.__dict__.keys())
         test_names.sort(key=testcase_methods.index)
         return test_names
-
-
-if __name__ == '__main__':
-    # TODO: make tests run in order. Unnessecary for passing tests, but I would like the final data files even when refresh=True
-    unittest.main(testLoader=SequentialTestLoader())
-    unittest.TestLoader.sortTestMethodsUsing = None
+'''
