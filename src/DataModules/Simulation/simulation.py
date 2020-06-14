@@ -40,7 +40,9 @@ cash_column_name = "Cash"
 portfolio_column_name = "Portofolio"
 actions_column_name = "Actions"
 portfolio_value_column_name = "PortfolioValue"
-log_columns = [cash_column_name, portfolio_column_name, actions_column_name, portfolio_value_column_name]
+total_commission_column_name = "TotalCommission"
+total_dividend_column_name = "TotalDividend"
+log_columns = [cash_column_name, portfolio_column_name, actions_column_name, portfolio_value_column_name, total_commission_column_name, total_dividend_column_name]
 
 download_data_time = "DownloadDataTime"
 generate_signals_time = "GenerateSignalsTime"
@@ -58,36 +60,34 @@ times = {download_data_time: 0.0,
 
 class Simulation:
 
-    def __init__(self, initial_cash=100000, symbols=["SPY"], benchmark=["SPY"],
-                 commission=default_commission, max_portfolio_size=20, purchase_size=0, short_sell=False, soft_signals=False,
-                 filename="", fail_gracefully=False, refresh=False, start_date=config.start_date, end_date=config.end_date,
-                 signal_func=None, signal_func_args=None, signal_func_kwargs=None):
-
-        if signal_func_args is None:
-            signal_func_args = []
-        if signal_func_kwargs is None:
-            signal_func_kwargs = {}
+    def __init__(self, filename="", initial_cash=100000, symbols=["SPY"], benchmark=["SPY"],
+                 commission=default_commission, max_portfolio_size=100, short_sell=False, soft_signals=False, partial_shares=False,
+                 fail_gracefully=False, refresh=False, start_date=config.start_date, end_date=config.end_date,
+                 signal_func=None, signal_func_args=[], signal_func_kwargs={}):
 
         if len(symbols) == 0:
             raise ValueError("Requires at least one symbol")
         if signal_func is None:
             raise ValueError("Requires a signal function")
 
+        self.filename = filename
         self.cash = initial_cash
         self.initial_cash = initial_cash
         self.symbols = symbols
         self.benchmark = benchmark
         self.commission = commission
         self.max_portfolio_size = max_portfolio_size
-        self.purchase_size = ((initial_cash // min(max_portfolio_size, len(symbols) // 5 + 1)) if purchase_size == 0 else purchase_size) - (self.commission[maximum_commission] if maximum_commission in self.commission else 0)
+        self.purchase_size = (initial_cash // min(max_portfolio_size, len(symbols) // 5 + 1)) - (self.commission[maximum_commission] if maximum_commission in self.commission else 0)
         self.short_sell = short_sell
         self.soft_signals = soft_signals
-        self.filename = filename
+        self.partial_shares = partial_shares
         self.fail_gracefully = fail_gracefully
         self.refresh = refresh
         self.start_date = start_date
         self.end_date = end_date
         self.signal_func = signal_func
+        self.signal_func_args = signal_func_args
+        self.signal_func_kwargs = signal_func_kwargs
 
         self.portfolio = {}
         self.signal_files = {}
@@ -95,10 +95,12 @@ class Simulation:
         self.times = times
         self.total_dividends = 0
         self.total_commissions = 0
+        self.total_trades = 0
         self.dates = pd.read_csv(utils.get_file_path(config.simulation_data_path, dates_table_filename), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date].index
         self.log = pd.DataFrame(index=self.dates, columns=log_columns)
         self.log[actions_column_name] = ""
         self.signal_table_filename = inspect.getmodule(self.signal_func).table_filename
+        self.signal_name = inspect.getmodule(self.signal_func).get_signal_name(**signal_func_kwargs)
         # TODO make this work for multiple signals
         '''
         self.signal_names = []
@@ -109,9 +111,9 @@ class Simulation:
         '''
 
         # self.get_price_on_date.cache_clear()
-        self.run(self.signal_func, signal_func_args, signal_func_kwargs)
+        self.run()
 
-    def buy(self, symbol, date, purchase_size, partial_shares=False):
+    def buy(self, symbol, date, purchase_size):
         """Simulates buying a stock
 
         Parameters:
@@ -127,31 +129,34 @@ class Simulation:
             purchase_size = self.purchase_size
 
         if self.cash < purchase_size:
-            purchase_size = self.cash
-        if symbol not in self.portfolio:
+            self.log.loc[date][actions_column_name] = self.log.loc[date][actions_column_name] + "Unable to buy {} ".format(symbol)
+            # purchase_size = self.cash
+        elif symbol not in self.portfolio:
             # TODO: buy at close price, or next day's open price?
-            shares = (purchase_size // self.get_price_on_date(symbol, date, time="Close")) if not partial_shares else (purchase_size / self.get_price_on_date(symbol, date, time="Close"))
+            shares = (purchase_size // self.get_price_on_date(symbol, date, time="Close")) if not self.partial_shares else (purchase_size / self.get_price_on_date(symbol, date, time="Close"))
             if shares < 0:
-                # TODO: Sometimes shares is -1. When variables are printed, math does not add up to -1??
-                # Symbol SLB self.purchase_size 5000 Purchase size -1.7605099999366214 Price 39.79 shares -1.0
+                # Sometimes shares is -1. When variables are printed, math does not add up to -1??
                 print("Symbol {} self.purchase_size {} Purchase size {} Price {} Shares {}".format(symbol, self.purchase_size, purchase_size, self.get_price_on_date(symbol, date, time="Close"), shares), flush=True)
-                # raise Exception
+                raise Exception
             if shares != 0:
                 self.portfolio[symbol] = shares
                 self.cash -= shares * self.get_price_on_date(symbol, date, time="Close")
                 self.cash -= self.calculate_commission(shares)
                 self.log.loc[date][actions_column_name] = self.log.loc[date][actions_column_name] + "{} {} {} Shares at {} totaling {:.2f} ".format(ta.buy_signal, symbol, shares, self.get_price_on_date(symbol, date), shares * self.get_price_on_date(symbol, date))
         else:
-            # buy more
-            pass
+            if self.short_sell and self.portfolio[symbol] < 0:
+                pass
+            elif self.portfolio[symbol] > 0:
+                # buy more
+                pass
 
-    def sell(self, symbol, date, amount=0, partial_shares=False, short_sell=False):
+    def sell(self, symbol, date, sell_size=0, short_sell=False):
         """Simulates selling a stock
 
         Parameters:
             symbol : str
             date : datetime
-            amount : float, optional
+            sell_size : float, optional
                 How much to sell. If 0, sell all
             partial_shares : bool
                 Whether partial shares are supported. If True, the amount sold will always equal amount, even if that number isn't reachable in a number of whole shares
@@ -159,29 +164,33 @@ class Simulation:
         """
 
         if symbol in self.portfolio:
-            # TODO: sell at close price, or next day's open price?
-            if amount == 0:  # sell all
-                self.cash += self.portfolio[symbol] * self.get_price_on_date(symbol, date)
-                self.cash -= self.calculate_commission(self.portfolio[symbol])
-                self.log.loc[date][actions_column_name] = self.log.loc[date][actions_column_name] + "{} {} {} Shares at {} totalling {:.2f} ".format(ta.sell_signal, symbol, self.portfolio[symbol], self.get_price_on_date(symbol, date), self.portfolio[symbol] * self.get_price_on_date(symbol, date))
-                self.portfolio.pop(symbol)
-            else:
-                shares = (amount // self.get_price_on_date(symbol, date)) if not partial_shares else (amount / self.get_price_on_date(symbol, date))
-                shares = shares if shares < self.portfolio[symbol] else self.portfolio[symbol]
-                if shares < 0:
-                    print("Amount {} Price {} Shares {}".format(amount, self.get_price_on_date(symbol, date, time="Close"), shares), flush=True)
-                    raise Exception
-                if shares != 0:
-                    self.cash += shares * self.get_price_on_date(symbol, date)
-                    self.cash -= self.calculate_commission(shares)
-                    self.log.loc[date][actions_column_name] = self.log.loc[date][actions_column_name] + "{} {} {} Shares at {} totalling {:.2f} ".format(ta.sell_signal, symbol, shares, self.get_price_on_date(symbol, date), shares * self.get_price_on_date(symbol, date))
-                    self.portfolio[symbol] -= shares
-                    if self.portfolio[symbol] < 0:
-                        print("Amount {} Price {} Shares {} Shares in portfolio {}".format(amount, self.get_price_on_date(symbol, date, time="Close"), shares, self.portfolio[symbol]), flush=True)
+            if self.portfolio[symbol] > 0:
+                # TODO: sell at close price, or next day's open price?
+                if sell_size == 0:  # sell all
+                    self.cash += self.portfolio[symbol] * self.get_price_on_date(symbol, date)
+                    self.cash -= self.calculate_commission(self.portfolio[symbol])
+                    self.log.loc[date][actions_column_name] = self.log.loc[date][actions_column_name] + "{} {} {} Shares at {} totalling {:.2f} ".format(ta.sell_signal, symbol, self.portfolio[symbol], self.get_price_on_date(symbol, date), self.portfolio[symbol] * self.get_price_on_date(symbol, date))
+                    self.portfolio.pop(symbol)
+                else:
+                    shares = (sell_size // self.get_price_on_date(symbol, date)) if not self.partial_shares else (sell_size / self.get_price_on_date(symbol, date))
+                    shares = shares if shares < self.portfolio[symbol] else self.portfolio[symbol]
+                    if shares < 0:
+                        print("Amount {} Price {} Shares {}".format(sell_size, self.get_price_on_date(symbol, date, time="Close"), shares), flush=True)
                         raise Exception
-                    if self.portfolio[symbol] == 0:
-                        self.portfolio.pop(symbol)
-            self.update_purchase_size(date, purchase_size=0)
+                    if shares != 0:
+                        self.cash += shares * self.get_price_on_date(symbol, date)
+                        self.cash -= self.calculate_commission(shares)
+                        self.log.loc[date][actions_column_name] = self.log.loc[date][actions_column_name] + "{} {} {} Shares at {} totalling {:.2f} ".format(ta.sell_signal, symbol, shares, self.get_price_on_date(symbol, date), shares * self.get_price_on_date(symbol, date))
+                        self.portfolio[symbol] -= shares
+                        if self.portfolio[symbol] < 0:
+                            print("Amount {} Price {} Shares {} Shares in portfolio {}".format(sell_size, self.get_price_on_date(symbol, date, time="Close"), shares, self.portfolio[symbol]), flush=True)
+                            raise Exception
+                        if self.portfolio[symbol] == 0:
+                            self.portfolio.pop(symbol)
+                self.update_purchase_size(date)
+            else:
+                # short sell more
+                pass
         else:
             if self.short_sell:
                 pass
@@ -197,6 +206,7 @@ class Simulation:
                 The commission required to buy a stock
         """
 
+        self.total_trades += 1
         if shares * self.commission[per_share_commission] < self.commission[minimum_commission]:
             self.total_commissions += self.commission[minimum_commission]
             return self.commission[minimum_commission]
@@ -283,52 +293,27 @@ class Simulation:
             total_value += self.portfolio[position] * self.get_price_on_date(position, date, time="Close")
         return total_value
 
-    def update_purchase_size(self, date, max_portfolio_size=None, purchase_size=0):
+    def update_purchase_size(self, date):
         """Updates purchase size
 
         Parameters:
             date : datetime
-            max_portfolio_size : int, optional
             purchase_size : float, optional
         """
 
-        if max_portfolio_size is None:
-            max_portfolio_size = self.max_portfolio_size
-        self.purchase_size = ((self.total_value(date) // min(max_portfolio_size, len(self.symbols) // 5 + 1)) if purchase_size == 0 else purchase_size) - (self.commission[maximum_commission] if maximum_commission in self.commission else 0)
+        self.purchase_size = (self.total_value(date) // min(self.max_portfolio_size, len(self.symbols) // 5 + 1)) - (self.commission[maximum_commission] if maximum_commission in self.commission else 0)
 
-    def generate_signals(self, symbols=None, refresh=None, start_date=None, end_date=None, signal_func=None, signal_func_args=[], signal_func_kwargs={}):
-        """Generates signals for the given symbol
-
-        Parameters:
-            symbols : list of str
-            refresh : bool
-            start_date : datetime, optional
-            end_date : datetime, optional
-            signal_func : function
-            signal_func_args : list
-            signal_func_kwargs : list
+    def generate_signals(self):
+        """Generates signals for all symbols
         """
 
         start_time = timer()
 
-        if symbols is None:
-            symbols = self.symbols
-        if isinstance(symbols, str):
-            symbols = [symbols]
-        if signal_func is None:
-            signal_func = self.signal_func
-        if refresh is None:
-            refresh = self.refresh
-        if start_date is None:
-            start_date = self.start_date
-        if end_date is None:
-            end_date = self.end_date
-
-        for symbol in symbols:
+        for symbol in self.symbols:
             print("Generating signals for " + symbol, flush=True)
             try:
-                signal_func(symbol, *signal_func_args, **signal_func_kwargs, plot=False, refresh=refresh, start_date=start_date, end_date=end_date)
-                # TODO make this work for multiple signal funcs, this will require backfill=True
+                self.signal_func(symbol, *self.signal_func_args, **self.signal_func_kwargs, refresh=self.refresh, start_date=self.start_date, end_date=self.end_date)
+                # TODO make this work for multiple signal funcs, this will require some backfill
                 '''
                 for i, func in enumerate(signal_func):
                     func(symbol, *args[i], refresh=refresh, start_date=start_date, end_date=end_date, **kwargs[i])
@@ -360,16 +345,16 @@ class Simulation:
             df = self.signal_files[symbol]
         else:
             try:
-                df = pd.read_csv(utils.get_file_path(config.ta_data_path, self.signal_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date]
+                df = pd.read_csv(utils.get_file_path(config.ta_data_path, self.signal_table_filename, symbol=symbol), usecols=["Date", self.signal_name], index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date]
                 self.signal_files[symbol] = df
             except FileNotFoundError:  # pd.errors.EmptyDataError
                 # When start_date is too recent to generate data, no files are generated
-                print("No signals found for {} {}".format(symbol, inspect.getmodule(self.signal_func)))
+                print("No signals found for {} {}".format(symbol, inspect.getmodule(self.signal_func).__name__))
                 self.symbols.remove(symbol)
                 self.times[read_signals_time] = self.times[read_signals_time] + timer() - start_time
                 return ta.default_signal
 
-        signal = df.loc[date][ta.signal_name] if date in df.index else ta.default_signal
+        signal = df.loc[date][self.signal_name] if date in df.index else ta.default_signal
         # TODO make this work for multiple signals
         '''
         signal = df.loc[date][self.signal_names[0]] if date in df.index else ta.default_signal
@@ -395,34 +380,25 @@ class Simulation:
 
         # Portfolio performance
         ax[0][0].plot(log.index, log[portfolio_value_column_name], label=portfolio_value_column_name)
+        ax[0][0].plot(log.index, log[cash_column_name], label=cash_column_name)
+        ax[0][0].plot(log.index, log[total_commission_column_name], label=total_commission_column_name)
+        ax[0][0].plot(log.index, log[total_dividend_column_name], label=total_dividend_column_name)
         utils.prettify_ax(ax[0][0], title=portfolio_value_column_name, start_date=self.start_date, end_date=self.end_date)
 
         # Benchmark performance
         for bench in benchmark:
             df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=bench), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date]
-            ax[1][0].plot(df.index, df["Close"], label=bench + "Price")
+            ax[1][0].plot(df.index, df["AdjClose"], label=bench + "Price")
         utils.prettify_ax(ax[1][0], title="Benchmarks", start_date=self.start_date, end_date=self.end_date)
 
         # Portfolio compared to benchmarks
         ax[0][1].plot(log.index, (log[portfolio_value_column_name] / log[portfolio_value_column_name][0]), label="Portfolio")
         for bench in benchmark:
             df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=bench), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date]
-            ax[0][1].plot(df.index, (df["Close"] / df["Close"][0]), label=bench)
+            ax[0][1].plot(df.index, (df["AdjClose"] / df["Close"][0]), label=bench)
             if len(benchmark) > 1:
                 ax[0][1].plot(df.index, (log[portfolio_value_column_name] / log[portfolio_value_column_name][0]) / (df["Close"] / df["Close"][0]), label="PortfolioVS" + bench)
-        # utils.prettify_ax(ax[0][1], title="PortfolioVSBenchmarks", start_date=self.start_date, end_date=self.end_date)
-
-        # TODO: fix this for when not all symbols start at the same date. Fill_value=1 flattens before dates where the return can be calculated, and is inaccurate for dates after the return has already been calculated
-        # Average return of available symbols
-        if len(self.symbols) > 1:
-            avg_return = pd.Series(0, index=self.dates)
-            count = pd.Series(0, index=self.dates)
-            for symbol in self.symbols:
-                df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date]
-                avg_return = avg_return.add(df["Close"] / df["Close"][0], fill_value=1)
-            avg_return = avg_return / len(self.symbols)
-            ax[0][1].plot(avg_return.index, avg_return, label="AverageReturnOfSymbols")
-            utils.prettify_ax(ax[0][1], title="AverageReturnOfSymbols", start_date=self.start_date, end_date=self.end_date)
+        utils.prettify_ax(ax[0][1], title="PortfolioVSBenchmarks", start_date=self.start_date, end_date=self.end_date)
 
         # Simulation compared to available symbols
         if len(self.symbols) < 6:
@@ -430,7 +406,7 @@ class Simulation:
             for symbol in self.symbols:
                 df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date]
                 # ax[1][1].plot(df.index, (log[log.index in df.index][total_value_column_name] / log[log.index in df.index][cash_column_name][0]) / (df["Close"] / df["Close"][0]), label="PortfolioVS" + symbol)
-                ax[1][1].plot(df.index, df["Close"] / df["Close"][0], label=symbol)
+                ax[1][1].plot(df.index, (df["AdjClose"] / df["Close"][0]), label=symbol)
             utils.prettify_ax(ax[1][1], title="PortfolioVSSymbols", start_date=self.start_date, end_date=self.end_date)
 
         # TODO: fix this for when not all symbols start at the same date. Fill_value=1 flattens before dates where the return can be calculated, and is inaccurate for dates after the return has already been calculated
@@ -439,16 +415,18 @@ class Simulation:
             avg_return = pd.Series(0, index=self.dates)
             for symbol in self.symbols:
                 df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date]
-                avg_return = avg_return.add(df["Close"] / df["Close"][0], fill_value=1)
+                avg_return = avg_return.add((df["AdjClose"] / df["Close"][0]), fill_value=1)
             avg_return = avg_return / len(self.symbols)
+            # add this to the PortfolioVSBenchmarks graph, don't reprettify
+            ax[0][1].plot(avg_return.index, avg_return, label="AverageReturnOfSymbols")
+            # add this to the PortfolioVSSymbols graph, don't reprettify
             ax[1][1].plot(avg_return.index, avg_return, label="AverageReturnOfSymbols")
-            utils.prettify_ax(ax[1][1], title="AverageReturnOfSymbols", start_date=self.start_date, end_date=self.end_date)
 
         utils.prettify_fig(fig, title=self.filename)
         fig.savefig(utils.get_file_path(config.simulation_graphs_path, self.filename + simulation_graph_filename))
         utils.debug(fig)
 
-    def run(self, signal_func, signal_func_args=[], signal_func_kwargs=[]):
+    def run(self):
         """Runs the simulation
         """
 
@@ -470,7 +448,7 @@ class Simulation:
                 self.symbols.remove(bench)
         self.times[download_data_time] = self.times[download_data_time] + timer() - start_time
 
-        self.generate_signals(self.symbols, refresh=self.refresh, signal_func=signal_func, signal_func_args=signal_func_args, signal_func_kwargs=signal_func_kwargs)
+        self.generate_signals()
 
         self.log.loc[self.dates[0]][cash_column_name, portfolio_column_name, actions_column_name, portfolio_value_column_name] = [self.cash, self.portfolio, "Initial ", self.total_value(self.dates[0])]
 
@@ -481,27 +459,16 @@ class Simulation:
                     self.get_dividends(symbol, date)
                 for symbol in self.symbols:
                     signal = self.read_signal(symbol, date)
-                    # logging only
-                    if signal == ta.buy_signal and self.cash < self.purchase_size:
-                        self.log.loc[date][actions_column_name] = self.log.loc[date][actions_column_name] + "Unable to buy {} ".format(symbol)
-                    # Instead of buying as much as possible, don't buy if we cannot make a full purchase
-                    if signal == ta.buy_signal and self.cash >= self.purchase_size:
+                    if signal == ta.buy_signal:
                         self.buy(symbol, date, self.purchase_size)
-                        self.log.loc[date][cash_column_name, portfolio_column_name, portfolio_value_column_name] = [self.cash, self.portfolio, self.total_value(date)]
                     if signal == ta.sell_signal:
-                        self.sell(symbol, date, amount=0)
-                        self.log.loc[date][cash_column_name, portfolio_column_name, portfolio_value_column_name] = [self.cash, self.portfolio, self.total_value(date)]
-                    # logging only
-                    if signal == ta.soft_buy_signal and self.soft_signals and self.cash < self.purchase_size:
-                        self.log.loc[date][actions_column_name] = self.log.loc[date][actions_column_name] + "Unable to buy {} ".format(symbol)
-                    # Instead of buying as much as possible, don't buy if we cannot make a full purchase
-                    if signal == ta.soft_buy_signal and self.soft_signals and self.cash > self.purchase_size:
+                        self.sell(symbol, date, sell_size=0)
+                    if signal == ta.soft_buy_signal and self.soft_signals:
                         self.buy(symbol, date, self.purchase_size)
-                        self.log.loc[date][cash_column_name, portfolio_column_name, portfolio_value_column_name] = [self.cash, self.portfolio, self.total_value(date)]
                     if signal == ta.soft_sell_signal and self.soft_signals and self.short_sell:
                         self.sell(symbol, date, self.purchase_size)
-                        self.log.loc[date][cash_column_name, portfolio_column_name, portfolio_value_column_name] = [self.cash, self.portfolio, self.total_value(date)]
-                self.log.loc[date][cash_column_name, portfolio_column_name, portfolio_value_column_name] = [self.cash, self.portfolio_value(date), self.total_value(date)]
+                self.log.loc[date][cash_column_name, portfolio_column_name, portfolio_value_column_name, total_commission_column_name, total_dividend_column_name] \
+                    = [self.cash, self.portfolio_value(date), self.total_value(date), self.total_commissions, self.total_dividends]
                 # Why does this line require str(self.portfolio)?
                 # self.log.loc[date][cash_column_name, portfolio_column_name, portfolio_value_column_name] = [self.cash, str(self.portfolio), self.total_value(date)]
         except (AttributeError, KeyError) as e:
@@ -520,12 +487,13 @@ class Simulation:
         print(str(psutil.Process(os.getpid()).memory_info().rss / float(2 ** 20)) + "mb")
         print("Dividends: {:.2f}".format(self.total_dividends))
         print("Commissions: {:.2f}".format(self.total_commissions))
+        print("Total trades: {}".format(self.total_trades))
         print("Performance: {}".format(self.get_performance()))
         print("Sharpe ratios: {}".format(self.get_sharpe_ratios()))
 
         self.log.loc[date][cash_column_name, portfolio_column_name, actions_column_name, portfolio_value_column_name] = \
-            [self.cash, self.portfolio_value(date), "Final: Performance: {} Times: {} Cache: {} Total Dividends: {:.2f} Total Commissions: {:.2f} Sharpe Ratios {}"
-                .format(self.get_performance(), self.format_times(), self.get_price_on_date.cache_info(), self.total_dividends, self.total_commissions, self.get_sharpe_ratios()), self.total_value(date)]
+            [self.cash, self.portfolio_value(date), "Final: Performance: {} Times: {} Cache: {} Total Dividends: {:.2f} Total Commissions: {:.2f} Total Trades: {} Sharpe Ratios {}"
+                .format(self.get_performance(), self.format_times(), self.get_price_on_date.cache_info(), self.total_dividends, self.total_commissions, self.total_trades, self.get_sharpe_ratios()), self.total_value(date)]
         self.log.to_csv(utils.get_file_path(config.simulation_data_path, self.filename + simulation_table_filename))
         self.log = self.log.loc[self.log[actions_column_name] != ""]  # self.log.dropna(subset=[actions_column_name], inplace=True)
         self.log.to_csv(utils.get_file_path(config.simulation_data_path, self.filename + simulation_actions_only_table_filename))
@@ -568,32 +536,38 @@ def update_dates_file(start_date=config.start_date, end_date=config.end_date):
 if __name__ == '__main__':
     '''
     Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500EMA20-50", max_portfolio_size=100,
+               refresh=False, filename="SP500EMA20-50",
                signal_func=ema.generate_signals, signal_func_kwargs={"period": [20, 50]})
     Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500EMA20-200", max_portfolio_size=100,
+               refresh=False, filename="SP500EMA20-200",
                signal_func=ema.generate_signals, signal_func_kwargs={"period": [20, 200]})
     # This is the 'benchmark'/'default'
     Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500EMA50-200", max_portfolio_size=100,
+               refresh=False, filename="SP500EMA50-200",
                signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
     Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500EMA50-200SoftSignals", max_portfolio_size=100, soft_signals=True,
+               refresh=False, filename="SP500EMA50-200SoftSignals", soft_signals=True,
+               signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
+    #Simulation(symbols=sp.get_sp500(),
+    #           refresh=False, filename="SP500EMA50-200ShortSell", short_sell=True,
+    #           signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
+    Simulation(symbols=sp.get_sp500(),
+               refresh=False, filename="SP500EMA50-200PortSize20", max_portfolio_size=20,
                signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
     Simulation(symbols=sp.get_removed_sp500(),
-               refresh=False, filename="RemovedSP500EMA50-200", max_portfolio_size=100,
+               refresh=False, filename="RemovedSP500EMA50-200",
                signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
     Simulation(symbols=sp.get_sp500() + sp.get_removed_sp500(),
-               refresh=False, filename="RemovedSP500EMA50-200", max_portfolio_size=100,
+               refresh=False, filename="CurrentAndRemovedSP500EMA50-200",
                signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
     Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500SMA50-200", max_portfolio_size=100,
+               refresh=False, filename="SP500SMA50-200",
                signal_func=sma.generate_signals, signal_func_kwargs={"period": [50, 200]})
     Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500MACD", max_portfolio_size=100,
+               refresh=False, filename="SP500MACD",
                signal_func=macd.generate_signals, signal_func_kwargs={"period": ema.default_periods})
     Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500RSI14", max_portfolio_size=100,
+               refresh=False, filename="SP500RSI14",
                signal_func=rsi.generate_signals, signal_func_kwargs={"period": rsi.default_period})
     Simulation(symbols=["SPY"],
                refresh=False, filename="SPYEMA50-200",
@@ -602,9 +576,5 @@ if __name__ == '__main__':
                refresh=False, filename="BigNEMA50-200",
                signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
     '''
-    Simulation(symbols=sp.get_sp500() + sp.get_removed_sp500(),
-           refresh=False, filename="RemovedSP500EMA50-200", max_portfolio_size=100,
-           signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
 
-# TODO Thread this
-# number of shares to buy is calculated before commission. Commission can then push cash into negatives
+# Threading causes issues where, if reading shortly after file is generated, pandas will read an empty file and throw pandas.errors.EmptyDataError: No columns to parse from file

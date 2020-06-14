@@ -28,6 +28,9 @@ class PricesTest(unittest.TestCase):
     def test_download_data_from_yahoo_except(self):
         self.assertRaises(RemoteDataError, p.download_data_from_yahoo, "this is not a valid symbol")
 
+    def test_get_dividend_ajusted_price_index(self):
+        p.get_dividend_ajusted_price(config.index, refresh=config.refresh)
+
     def test_get_average_price_index(self):
         p.get_average_price(config.index, refresh=config.refresh)
 
@@ -35,13 +38,13 @@ class PricesTest(unittest.TestCase):
         p.plot_prices(config.index, refresh=config.refresh)
 
     def test_plot_prices_mult_symbol(self):
-        p.plot_prices([config.index, config.sp500_yahoo, config.vix_yahoo], refresh=config.refresh)
+        p.plot_prices([config.index, config.sp500, config.vix], refresh=config.refresh)
 
     def test_plot_percentage_gains_index(self):
         p.plot_percentage_gains(config.index, refresh=config.refresh)
 
     def test_plot_percentage_gains_mult_symbol(self):
-        p.plot_percentage_gains([config.index, config.sp500_yahoo, config.vix_yahoo], refresh=config.refresh)
+        p.plot_percentage_gains([config.index, config.sp500, config.vix], refresh=config.refresh)
 
     '''
     def test_get_daily_return_index(self):
@@ -63,12 +66,12 @@ class PricesTest(unittest.TestCase):
     def test_get_daily_return_daily(self):
         if config.skip_test:
             self.skipTest("Too many files generated")
-        p.get_daily_return_flex(config.index, func="daily", refresh=config.refresh)
+        p.get_daily_return(config.index, period="daily", refresh=config.refresh)
 
     def test_get_daily_return_all(self):
         if config.skip_test:
             self.skipTest("Too many files generated")
-        p.get_daily_return_flex(config.index, refresh=config.refresh)
+        p.get_daily_return(config.index, refresh=config.refresh)
 
     def test_after_during_hours_returns_index_period(self):
         if config.skip_test:

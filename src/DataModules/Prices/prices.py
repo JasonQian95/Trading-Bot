@@ -30,44 +30,16 @@ during_and_after_hours_table_filename = during_and_after_hours_name + ".csv"
 during_and_after_hours_graph_filename = during_and_after_hours_name + ".png"
 during_and_after_hours_normalized_name = "AfterHoursAndDuringHoursNormalizedReturns"
 
-'''
-import pandas_datareader.fred as fred
-def download_data_from_fred(symbol, backfill=False, start_date=config.start_date, end_date=config.end_date):
-    """Generates a .csv file containing the closing prices by date from FRED for the given symbol.
-    As Fred does not have data on individual stock, the main use is get data on SP500 and VIXCLS
 
-    Parameters:
-        symbol : str
-        backfill : bool, optional
-        start_date : date, optional
-        end_date : date, optional
-
-    Returns:
-        dataframe
-            A dataframe containing closing prices by date for the given symbol to a .csv
-    """
-    
-    df = fred.FredReader(symbol, start_date, end_date).read()
-    # df = pandas_datareader.DataReader(symbol, "fred", start_date, end_date)
-    df.index.rename("Date", inplace=True)
-    df.rename(columns={symbol: "Close"}, inplace=True)
-    utils.debug(df)
-
-    if backfill:
-        utils.backfill(df)
-
-    df.to_csv(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol))
-    return df
-'''
-
-
-def download_data_from_yahoo(symbol, backfill=False, start_date=config.start_date, end_date=config.end_date):
+def download_data_from_yahoo(symbol, adjust=True, backfill=False, start_date=config.start_date, end_date=config.end_date):
     """Generates a .csv file containing the high, low, open, close, volume, and adjusted close by date from Yahoo for the given symbol
     For currency conversion rates, the format is like "USDCAD=X"
     For the S&P500 index, Yahoo uses the ticker GSPX. This function is hardcoded to query Yahoo using GSPX instead of SP500, but save the data to SP500.
 
     Parameters:
         symbol : str
+        adjust : bool
+            Whether to incluse the AdjClose column or not. Uses my implementation, not Yahoo's
         backfill : bool, optional
         start_date : date, optional
         end_date : date, optional
@@ -77,28 +49,21 @@ def download_data_from_yahoo(symbol, backfill=False, start_date=config.start_dat
             A dataframe containing high, low, open, close, volume, and adjusted close by date for the given symbol
     """
 
-    '''
-    df = dr.get_data_yahoo(symbol, start_date, end_date)
-    
-    df.drop("Adj Close", axis=1, inplace=True)
-    
-    utils.debug(df)
-
-    if backfill:
-        utils.backfill(df)
-
-    # TODO: if dividends causes errors, go to the error and remove the 'eval'
-    # df = df.merge(dr.DataReader(symbol, 'yahoo-dividends', start_date, end_date), how='outer', left_index=True, right_index=True)
-    # df.sort_index(inplace=True)  # Yahoo data is sorted anyways
-    '''
-
     df = yf.Ticker(symbol).history(auto_adjust=False, start=start_date, end=end_date)
+
+    # This causes an error with pandas, so we're using yfinance instead
+    # if dividends causes errors, go to the error and remove the 'eval'
+    # df = dr.get_data_yahoo(symbol, start_date, end_date)
+    # df = df.merge(dr.DataReader(symbol, 'yahoo-dividends', start_date, end_date), how='outer', left_index=True, right_index=True)
 
     if symbol.upper() in yf.shared._ERRORS:
         raise RemoteDataError("No data fetched for symbol " + symbol + " using yfinance")
 
     df.drop("Adj Close", axis=1, inplace=True)
     df.drop("Stock Splits", axis=1, inplace=True)
+
+    if adjust:
+        df["AdjClose"] = df["Close"].add(df["Dividends"].cumsum())
 
     if backfill:
         utils.backfill(df)
@@ -110,16 +75,46 @@ def download_data_from_yahoo(symbol, backfill=False, start_date=config.start_dat
     return df
 
 
-def get_average_price(symbol, method=["Open", "High", "Low", "Close"], backfill=False, refresh=False, start_date=config.start_date, end_date=config.end_date):
+def get_dividend_adjusted_price(symbol, columns=["Close"], refresh=False, start_date=config.start_date, end_date=config.end_date):
+    """Adjusted all ["Open", "High", "Low", "Close"] columns for dividends.
+
+    Parameters:
+        symbol : str
+        columns : list of str, str
+        The columns to use. The list of expected columns are ["Open", "High", "Low", "Close"],
+            but fewer columns may be valid as well
+        refresh : bool, optional
+        start_date : date, optional
+        end_date : date, optional
+
+    Returns:
+        dataframe
+            A dataframe containing adjusted prices by date for the given symbol
+    """
+
+    if utils.refresh(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol), refresh=refresh):
+        download_data_from_yahoo(symbol, start_date=start_date, end_date=end_date)
+    df = pd.read_csv(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
+
+    if isinstance(columns, str):
+        columns = [columns]
+
+    for c in columns:
+        df["Adj" + c] = df[c].add(df["Dividends"].cumsum())
+        utils.debug(df["Adj" + c])
+    df.to_csv(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol))
+    return df[("Adj" + c for c in columns)]
+
+
+def get_average_price(symbol, columns=["Open", "High", "Low", "Close"], refresh=False, start_date=config.start_date, end_date=config.end_date):
     """Creates a list of the average price by date for the given symbol, adds the data to the existing corresponding .csv file, and returns this data
     If no valid columns are provided in method, the data will be all nulls
 
     Parameters:
         symbol : str
-        method: list of str
+        columns: list of str
             The columns to use. The list of expected columns are ["Open", "High", "Low", "Close"],
-            but other columns may be valid as well
-        backfill : bool, optional
+            but fewer columns may be valid as well
         refresh : bool, optional
         start_date : date, optional
         end_date : date, optional
@@ -130,28 +125,26 @@ def get_average_price(symbol, method=["Open", "High", "Low", "Close"], backfill=
     """
 
     if utils.refresh(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol), refresh=refresh):
-        download_data_from_yahoo(symbol, backfill=backfill, start_date=start_date, end_date=end_date)
+        download_data_from_yahoo(symbol, start_date=start_date, end_date=end_date)
     df = pd.read_csv(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
 
     if avg_name not in df.columns:
         df[avg_name] = 0
-        count = sum(e in df.columns for e in method)
-        for i in method:
-            if i in df.columns:
-                df[avg_name] = df[avg_name].add(df[i])
+        count = sum(c in df.columns for c in columns)
+        for c in columns:
+            if c in df.columns:
+                df[avg_name] = df[avg_name].add(df[c])
         df[avg_name] = df[avg_name] / count  # Will leave null values if no methods were valid
-        # TODO: doesnt show column name in debug
         utils.debug(df[avg_name])
         df.to_csv(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol))
     return df[avg_name]
 
 
-def plot_prices(symbol, backfill=False, refresh=False, start_date=config.start_date, end_date=config.end_date):
+def plot_prices(symbol, refresh=False, start_date=config.start_date, end_date=config.end_date):
     """Plots a graph of the close prices for the given symbol
 
     Parameters:
         symbol : str
-        backfill : bool, optional
         refresh : bool, optional
         start_date : date, optional
         end_date : date, optional
@@ -163,12 +156,12 @@ def plot_prices(symbol, backfill=False, refresh=False, start_date=config.start_d
 
     if isinstance(symbol, str):
         symbol = [symbol]
-    # TODO Sort symbols here? Otherwise ["A", "B"] and ["B", "A"] generates 2 of the same file
+    symbol.sort()
 
     fig, ax = plt.subplots(figsize=config.figsize)
     for s in symbol:
         if utils.refresh(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=s), refresh=refresh):
-            download_data_from_yahoo(s, backfill=backfill, start_date=start_date, end_date=end_date)
+            download_data_from_yahoo(s, start_date=start_date, end_date=end_date)
         df = pd.read_csv(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=s), index_col="Date", parse_dates=["Date"])[start_date:end_date]
 
         ax.plot(df.index, df["Close"], label=s + "Price")
@@ -180,12 +173,11 @@ def plot_prices(symbol, backfill=False, refresh=False, start_date=config.start_d
     return fig, ax
 
 
-def plot_percentage_gains(symbol, backfill=False, refresh=False, start_date=config.start_date, end_date=config.end_date):
+def plot_percentage_gains(symbol, refresh=False, start_date=config.start_date, end_date=config.end_date):
     """Plots a graph of the percentage gains for the given symbol
 
     Parameters:
         symbol : str
-        backfill : bool, optional
         refresh : bool, optional
         start_date : date, optional
         end_date : date, optional
@@ -197,12 +189,12 @@ def plot_percentage_gains(symbol, backfill=False, refresh=False, start_date=conf
 
     if isinstance(symbol, str):
         symbol = [symbol]
-    # TODO Sort symbols here? Otherwise ["A", "B"] and ["B", "A"] generates 2 of the same file
+    symbol.sort()
 
     fig, ax = plt.subplots(figsize=config.figsize)
     for s in symbol:
         if utils.refresh(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=s), refresh=refresh):
-            download_data_from_yahoo(s, backfill=backfill, start_date=start_date, end_date=end_date)
+            download_data_from_yahoo(s, start_date=start_date, end_date=end_date)
         df = pd.read_csv(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=s), index_col="Date", parse_dates=["Date"])[start_date:end_date]
 
         ax.plot(df.index, df["Close"] / df["Close"][0], label=s + "Price")
@@ -214,133 +206,14 @@ def plot_percentage_gains(symbol, backfill=False, refresh=False, start_date=conf
     utils.debug(fig)
     return fig, ax
 
-'''
-def get_daily_return(symbol, backfill=False, refresh=False, start_date=config.start_date, end_date=config.end_date):
+
+def get_daily_return(symbol, period=["daily", "after_hours", "during_hours"], refresh=False, start_date=config.start_date, end_date=config.end_date):
     """Plots a graph of the daily return for the given symbol, adds the data to the existing corresponding .csv file, and returns this data
 
     Parameters:
         symbol : str
-        backfill : bool, optional
-        refresh : bool, optional
-        start_date : date, optional
-        end_date : date, optional
-
-    Returns:
-        dataframe
-            A dataframe containing the daily return by date for the given symbol
-    """
-
-    if not utils.refresh(utils.get_file_path(config.prices_data_path, daily_return_table_filename, symbol=symbol), refresh=refresh):
-        df = pd.read_csv(utils.get_file_path(config.prices_data_path, daily_return_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
-    else:
-        if utils.refresh(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol), refresh=refresh):
-            download_data_from_yahoo(symbol, backfill=backfill, start_date=start_date, end_date=end_date)
-        df = pd.read_csv(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
-
-    if daily_return_name not in df.columns:
-        df[daily_return_name] = (df["Close"] / df["Close"].shift(1)) - 1
-        utils.debug(df[daily_return_name])
-        df.to_csv(utils.get_file_path(config.prices_data_path, daily_return_table_filename, symbol=symbol))
-
-    fig, ax = plt.subplots(2, figsize=config.figsize)
-    ax[0].plot(df.index, df[daily_return_name], label=symbol + daily_return_name)
-    utils.prettify_ax(ax[0], title=symbol + daily_return_name, center=True, start_date=start_date, end_date=end_date)
-
-    if utils.refresh(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=config.vix_yahoo), refresh=refresh):
-        download_data_from_yahoo(config.vix_yahoo, backfill=backfill, start_date=start_date, end_date=end_date)
-    vix_df = pd.read_csv(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=config.vix_yahoo), index_col="Date", parse_dates=["Date"])[start_date:end_date]
-    ax[1].plot(vix_df.index, vix_df["Close"], label=config.vix_yahoo + "Price")
-    utils.prettify_ax(ax[1], title=config.vix_yahoo + "Price", start_date=start_date, end_date=end_date)
-
-    utils.prettify_fig(fig)
-    fig.savefig(utils.get_file_path(config.prices_graphs_path, daily_return_graph_filename, symbol=symbol))
-    utils.debug(fig)
-    return df[daily_return_name]
-
-
-def get_after_hours_daily_return(symbol, backfill=False, refresh=False, start_date=config.start_date, end_date=config.end_date):
-    """Plots a graph of the after hours daily return for the given symbol, adds the data to the existing corresponding .csv file, and returns this data
-
-    Parameters:
-        symbol : str
-        backfill : bool, optional
-        refresh : bool, optional
-        start_date : date, optional
-        end_date : date, optional
-
-    Returns:
-        dataframe
-            A dataframe containing the after hours daily return by date for the given symbol
-    """
-
-    if not utils.refresh(utils.get_file_path(config.prices_data_path, daily_return_table_filename, symbol=symbol), refresh=refresh):
-        df = pd.read_csv(utils.get_file_path(config.prices_data_path, daily_return_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
-    else:
-        if utils.refresh(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol), refresh=refresh):
-            download_data_from_yahoo(symbol, backfill=backfill, start_date=start_date, end_date=end_date)
-        df = pd.read_csv(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
-
-    if after_hours_daily_return_name not in df.columns:
-        df[after_hours_daily_return_name] = (df["Open"] / df["Close"].shift(1)) - 1
-        utils.debug(df[after_hours_daily_return_name])
-        df.to_csv(utils.get_file_path(config.prices_data_path, daily_return_table_filename, symbol=symbol))
-
-    fig, ax = plt.subplots(figsize=config.figsize)
-    ax.plot(df.index, df[after_hours_daily_return_name], label=symbol + after_hours_daily_return_name)
-    utils.prettify_ax(ax, title=symbol + after_hours_daily_return_name, center=True, start_date=start_date, end_date=end_date)
-
-    utils.prettify_fig(fig)
-    fig.savefig(utils.get_file_path(config.prices_graphs_path, after_hours_daily_return_graph_filename, symbol=symbol))
-    utils.debug(fig)
-    return df[after_hours_daily_return_name]
-
-
-def get_during_hours_daily_return(symbol, backfill=False, refresh=False, start_date=config.start_date, end_date=config.end_date):
-    """Plots a graph of the during hours daily return for the given symbol, adds the data to the existing corresponding .csv file, and returns this data
-
-    Parameters:
-        symbol : str
-        backfill : bool, optional
-        refresh : bool, optional
-        start_date : date, optional
-        end_date : date, optional
-
-    Returns:
-        dataframe
-            A dataframe containing the during hours daily return by date for the given symbol
-    """
-
-    if not utils.refresh(utils.get_file_path(config.prices_data_path, daily_return_table_filename, symbol=symbol), refresh=refresh):
-        df = pd.read_csv(utils.get_file_path(config.prices_data_path, daily_return_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
-    else:
-        if utils.refresh(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol), refresh=refresh):
-            download_data_from_yahoo(symbol, backfill=backfill, start_date=start_date, end_date=end_date)
-        df = pd.read_csv(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
-
-    if during_hours_daily_return_name not in df.columns:
-        df[during_hours_daily_return_name] = (df["Close"] / df["Open"]) - 1
-        utils.debug(df[during_hours_daily_return_name])
-        df.to_csv(utils.get_file_path(config.prices_data_path, daily_return_table_filename, symbol=symbol))
-
-    fig, ax = plt.subplots(figsize=config.figsize)
-    ax.plot(df.index, df[during_hours_daily_return_name], label=symbol + during_hours_daily_return_name)
-    utils.prettify_ax(ax, title=symbol + during_hours_daily_return_name, center=True, start_date=start_date, end_date=end_date)
-
-    utils.prettify_fig(fig)
-    fig.savefig(utils.get_file_path(config.prices_graphs_path, during_hours_daily_return_graph_filename, symbol=symbol))
-    utils.debug(fig)
-    return df[during_hours_daily_return_name]
-'''
-
-
-def get_daily_return_flex(symbol, func=["daily", "after_hours", "during_hours"], backfill=False, refresh=False, start_date=config.start_date, end_date=config.end_date):
-    """Plots a graph of the daily return for the given symbol, adds the data to the existing corresponding .csv file, and returns this data
-
-    Parameters:
-        symbol : str
-        func : str
+        period : str
             Valid values are "daily", "after_hours", "during_hours"
-        backfill : bool, optional
         refresh : bool, optional
         start_date : date, optional
         end_date : date, optional
@@ -354,16 +227,16 @@ def get_daily_return_flex(symbol, func=["daily", "after_hours", "during_hours"],
         df = pd.read_csv(utils.get_file_path(config.prices_data_path, daily_return_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
     else:
         if utils.refresh(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol), refresh=refresh):
-            download_data_from_yahoo(symbol, backfill=backfill, start_date=start_date, end_date=end_date)
-        df = pd.read_csv(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
+            download_data_from_yahoo(symbol, start_date=start_date, end_date=end_date)
+        df = pd.read_csv(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol), iusecols=["Date", "Open", "Close"], ndex_col="Date", parse_dates=["Date"])[start_date:end_date]
 
-    if isinstance(func, str):
-        func = [func]
+    if isinstance(period, str):
+        period = [period]
     used_columns = []
 
-    fig, ax = plt.subplots(len(func) + 1, figsize=config.figsize)  # + 1 to plot against vix
+    fig, ax = plt.subplots(len(period) + 1, figsize=config.figsize)  # + 1 to plot against vix
 
-    for i, f in enumerate(func):
+    for i, f in enumerate(period):
         if f == "daily":
             column_name = daily_return_name
             return_name = daily_return_name
@@ -390,11 +263,11 @@ def get_daily_return_flex(symbol, func=["daily", "after_hours", "during_hours"],
         ax[i].plot(df.index, df[column_name], label=symbol + return_name)
         utils.prettify_ax(ax[i], title=symbol + return_name, center=True, start_date=start_date, end_date=end_date)
 
-    if utils.refresh(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=config.vix_yahoo), refresh=refresh):
-        download_data_from_yahoo(config.vix_yahoo, backfill=backfill, start_date=start_date, end_date=end_date)
-    vix_df = pd.read_csv(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=config.vix_yahoo), index_col="Date", parse_dates=["Date"])[start_date:end_date]
-    ax[-1].plot(vix_df.index, vix_df["Close"], label=config.vix_yahoo + "Price")
-    utils.prettify_ax(ax[-1], title=config.vix_yahoo + "Price", start_date=start_date, end_date=end_date)
+    if utils.refresh(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=config.vix), refresh=refresh):
+        download_data_from_yahoo(config.vix, start_date=start_date, end_date=end_date)
+    vix_df = pd.read_csv(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=config.vix), index_col="Date", parse_dates=["Date"])[start_date:end_date]
+    ax[-1].plot(vix_df.index, vix_df["Close"], label=config.vix + "Price")
+    utils.prettify_ax(ax[-1], title=config.vix + "Price", start_date=start_date, end_date=end_date)
 
     utils.prettify_fig(fig)
     fig.savefig(utils.get_file_path(config.prices_graphs_path, ("-".join(str(c) for c in used_columns)), symbol=symbol))
@@ -402,14 +275,13 @@ def get_daily_return_flex(symbol, func=["daily", "after_hours", "during_hours"],
     return df[used_columns]
 
 
-def after_during_hours_returns(symbol, period=0, backfill=False, refresh=False, start_date=config.start_date, end_date=config.end_date):
+def after_during_hours_returns(symbol, period=0, refresh=False, start_date=config.start_date, end_date=config.end_date):
     """Plots a graph of the after hours and daily hours return for the given symbol, saves this data in a .csv file, and returns this data
 
     Parameters:
         symbol : str
         period : int
             The number of trading days to look back. There are ~260 trading days in a year
-        backfill : bool, optional
         refresh : bool, optional
         start_date : date, optional
         end_date : date, optional
@@ -422,7 +294,7 @@ def after_during_hours_returns(symbol, period=0, backfill=False, refresh=False, 
         df = pd.read_csv(utils.get_file_path(config.prices_data_path, daily_return_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
     else:
         if utils.refresh(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol), refresh=refresh):
-            download_data_from_yahoo(symbol, backfill=backfill, start_date=start_date, end_date=end_date)
+            download_data_from_yahoo(symbol, start_date=start_date, end_date=end_date)
         df = pd.read_csv(utils.get_file_path(config.prices_data_path, price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
 
     if period != 0:

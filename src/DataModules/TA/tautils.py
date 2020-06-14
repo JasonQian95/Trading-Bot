@@ -56,7 +56,7 @@ def get_performance(symbol, start_date=config.start_date, end_date=config.end_da
     """
 
     df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
-    return df["Close"][-1] / df["Close"][0]
+    return df["AdjClose"][-1] / df["Close"][0]
 
 
 def get_sharpe_ratio(symbol, start_date=config.start_date, end_date=config.end_date):
@@ -74,7 +74,7 @@ def get_sharpe_ratio(symbol, start_date=config.start_date, end_date=config.end_d
 
     # multiply sharpe ratios by (252 ^0.5) to annualize
     df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
-    return (df["Close"] / df["Close"].shift(1)).mean() / (df["Close"] / df["Close"].shift(1)).std()
+    return (df["AdjClose"] / df["AdjClose"].shift(1)).mean() / (df["AdjClose"] / df["AdjClose"].shift(1)).std()
 
 
 # Pretty sure this one is wrong. Even when no purchases are made, a non-zero sharpe ratio is returned

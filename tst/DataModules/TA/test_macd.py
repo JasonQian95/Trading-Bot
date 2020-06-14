@@ -18,6 +18,9 @@ class MACDTest(unittest.TestCase):
     def test_generate_signals(self):
         macd.generate_signals(config.index, refresh=config.refresh)
 
+    def test_plot_signals(self):
+        macd.plot_signals(config.index, refresh=config.refresh)
+
 
 if __name__ == '__main__':
     unittest.main()

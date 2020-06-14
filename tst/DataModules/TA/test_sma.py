@@ -18,6 +18,9 @@ class SMATest(unittest.TestCase):
     def test_generate_signals(self):
         sma.generate_signals(config.index, refresh=config.refresh)
 
+    def test_plot_signals(self):
+        sma.plot_signals(config.index, refresh=config.refresh)
+
 
 if __name__ == '__main__':
     unittest.main()

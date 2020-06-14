@@ -56,7 +56,7 @@ def get_file_path(path, filename, symbol="", dated=config.dated, start_date=conf
             A file path combining the given data
     """
 
-    # symbol = symbol.upper()
+    symbol = symbol.upper()
     start_date = (start_date.replace("-", "_") if isinstance(start_date, str) else start_date.strftime(config.date_format))
     end_date = (end_date.replace("-", "_") if isinstance(end_date, str) else end_date.strftime(config.date_format))
     return join(path, symbol + ((start_date + "-" + end_date) if dated else "") + filename)
@@ -80,7 +80,8 @@ def refresh(path, refresh=False):
     # for refesh=True, plot_ema will call ema with refresh=False and ema will read the stale ma files
     # or plot_ema will call ema with refresh=True and ema will read from price files and discard the already generated ma
     if exists(path) and refresh:
-        os.remove(path)
+        pass
+        #os.remove(path)
     return not exists(path) or refresh
 
 

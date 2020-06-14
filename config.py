@@ -17,8 +17,8 @@ trash_data_files = True
 
 # Frequently used symbols
 index = "SPY"
-sp500_yahoo = "^GSPC"
-vix_yahoo = "^VIX"
+sp500 = "^GSPC"
+vix = "^VIX"
 test_symbol = "AAPL"
 broken_symbols = ["HWM", "TT", "VIAC",  # S&P500
                   "ANR", "BMC", "CA", "CBE", "CSC", "EP", "GLK", "KG", "JNY", "HNZ", "MEE", "MI", "NYX", "PCL", "PCP", "PTV", "RSH", "SAI", "SBL", "SCG", "SGP", "SLE", "SVU", "TIE", "TRB", "WFR", "XL"]  # Removed from S&P500
