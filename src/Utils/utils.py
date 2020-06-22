@@ -146,7 +146,14 @@ def prettify_ax(ax, title="", center=False, percentage=False, start_date=config.
         ax.plot(range(min_x, max_x), [y] * len(range(min_x, max_x)), "--", linewidth=0.5, color="black", alpha=config.alpha)
 
 
-def prettify_fig(fig, title="", start_date=config.start_date, end_date=config.end_date):
+def prettify_fig(fig, title=""):
+    """Makes matplotlib.pyplot.Figure look pretty
+
+    Parameters:
+        fig : Figure
+        title : str
+    """
+
     # fig.autofmt_xdate()  # tilts dates
     fig.set_size_inches(config.figsize)  # currently I always set this when creating the fig
     fig.suptitle(title)

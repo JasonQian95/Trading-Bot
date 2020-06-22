@@ -196,4 +196,4 @@ def plot_signals(symbol, period=default_periods, refresh=False, start_date=confi
 
 
 def get_signal_name(period=default_periods):
-    return "SMA" + ta.signal_name + str(period[0]) + "-" + str(period[1])
+    return "SMA" + "Signal" + str(period[0]) + "-" + str(period[1])

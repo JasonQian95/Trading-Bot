@@ -90,9 +90,11 @@ class Simulation:
         self.signal_func_kwargs = signal_func_kwargs
 
         self.portfolio = {}
+        self.cost_basis = {}
+        self.winners_losers = {"Winners": 0, "Losers": 0}
         self.signal_files = {}
         self.price_files = {}
-        self.times = times
+        self.times = times.copy()
         self.total_dividends = 0
         self.total_commissions = 0
         self.total_trades = 0
@@ -132,7 +134,7 @@ class Simulation:
             self.log.loc[date][actions_column_name] = self.log.loc[date][actions_column_name] + "Unable to buy {} ".format(symbol)
             # purchase_size = self.cash
         elif symbol not in self.portfolio:
-            # TODO: buy at close price, or next day's open price?
+            # buy at close price, or next day's open price?
             shares = (purchase_size // self.get_price_on_date(symbol, date, time="Close")) if not self.partial_shares else (purchase_size / self.get_price_on_date(symbol, date, time="Close"))
             if shares < 0:
                 # Sometimes shares is -1. When variables are printed, math does not add up to -1??
@@ -143,6 +145,8 @@ class Simulation:
                 self.cash -= shares * self.get_price_on_date(symbol, date, time="Close")
                 self.cash -= self.calculate_commission(shares)
                 self.log.loc[date][actions_column_name] = self.log.loc[date][actions_column_name] + "{} {} {} Shares at {} totaling {:.2f} ".format(ta.buy_signal, symbol, shares, self.get_price_on_date(symbol, date), shares * self.get_price_on_date(symbol, date))
+
+                self.cost_basis[symbol] = self.get_price_on_date(symbol, date, time="Close")
         else:
             if self.short_sell and self.portfolio[symbol] < 0:
                 pass
@@ -150,7 +154,7 @@ class Simulation:
                 # buy more
                 pass
 
-    def sell(self, symbol, date, sell_size=0, short_sell=False):
+    def sell(self, symbol, date, sell_size=0):
         """Simulates selling a stock
 
         Parameters:
@@ -165,7 +169,7 @@ class Simulation:
 
         if symbol in self.portfolio:
             if self.portfolio[symbol] > 0:
-                # TODO: sell at close price, or next day's open price?
+                # sell at close price, or next day's open price?
                 if sell_size == 0:  # sell all
                     self.cash += self.portfolio[symbol] * self.get_price_on_date(symbol, date)
                     self.cash -= self.calculate_commission(self.portfolio[symbol])
@@ -187,7 +191,12 @@ class Simulation:
                             raise Exception
                         if self.portfolio[symbol] == 0:
                             self.portfolio.pop(symbol)
-                self.update_purchase_size(date)
+
+                if self.cost_basis[symbol] < self.get_price_on_date(symbol, date):
+                    self.winners_losers["Winners"] += 1
+                else:
+                    self.winners_losers["Losers"] += 1
+                self.cost_basis.pop(symbol)
             else:
                 # short sell more
                 pass
@@ -269,15 +278,17 @@ class Simulation:
             self.price_files[symbol] = df
 
         dividend = self.portfolio[symbol] * df.loc[date]["Dividends"] if date in df.index and "Dividends" in df.columns else 0
-        self.cash += dividend
-        self.total_dividends += dividend
         if dividend != 0:
+            self.cash += dividend
+            self.total_dividends += dividend
             self.log.loc[date][actions_column_name] = self.log.loc[date][actions_column_name] + "Dividend: {} {} Shares totaling {:.2f} ".format(symbol, self.portfolio[symbol], dividend)
+
+            self.cost_basis[symbol] -= df.loc[date]["Dividends"]
 
         self.times[get_dividend_time] = self.times[get_dividend_time] + timer() - start_time
         return dividend
 
-    def total_value(self, date):
+    def portfolio_value(self, date):
         """Gets the total value of the portfolio on the given date
 
         Parameters:
@@ -288,20 +299,35 @@ class Simulation:
                 The total value of the portfolio on the given date
         """
 
-        total_value = self.cash
+        portfolio_value = self.cash
         for position in self.portfolio:
-            total_value += self.portfolio[position] * self.get_price_on_date(position, date, time="Close")
-        return total_value
+            portfolio_value += self.portfolio[position] * self.get_price_on_date(position, date, time="Close")
+
+        return portfolio_value
 
     def update_purchase_size(self, date):
         """Updates purchase size
 
         Parameters:
             date : datetime
-            purchase_size : float, optional
         """
 
-        self.purchase_size = (self.total_value(date) // min(self.max_portfolio_size, len(self.symbols) // 5 + 1)) - (self.commission[maximum_commission] if maximum_commission in self.commission else 0)
+        self.purchase_size = (self.portfolio_value(date) // min(self.max_portfolio_size, len(self.symbols) // 5 + 1)) - (self.commission[maximum_commission] if maximum_commission in self.commission else 0)
+
+    def get_max_drawdown(self):
+        """Returns the maximum drawdown
+
+        Parameters:
+            date : datetime
+
+        Returns:
+            float
+                The maximum drawdown
+        """
+
+        rolling_max = self.log[portfolio_value_column_name].cummax()
+        drawdown = self.log[portfolio_value_column_name] / rolling_max - 1.0
+        return drawdown.cummin().min() * 100
 
     def generate_signals(self):
         """Generates signals for all symbols
@@ -310,7 +336,7 @@ class Simulation:
         start_time = timer()
 
         for symbol in self.symbols:
-            print("Generating signals for " + symbol, flush=True)
+            # print("Generating signals for " + symbol, flush=True)
             try:
                 self.signal_func(symbol, *self.signal_func_args, **self.signal_func_kwargs, refresh=self.refresh, start_date=self.start_date, end_date=self.end_date)
                 # TODO make this work for multiple signal funcs, this will require some backfill
@@ -380,7 +406,8 @@ class Simulation:
 
         # Portfolio performance
         ax[0][0].plot(log.index, log[portfolio_value_column_name], label=portfolio_value_column_name)
-        ax[0][0].plot(log.index, log[cash_column_name], label=cash_column_name)
+        if len(self.symbols) > 1:
+            ax[0][0].plot(log.index, log[cash_column_name], label=cash_column_name)
         ax[0][0].plot(log.index, log[total_commission_column_name], label=total_commission_column_name)
         ax[0][0].plot(log.index, log[total_dividend_column_name], label=total_dividend_column_name)
         utils.prettify_ax(ax[0][0], title=portfolio_value_column_name, start_date=self.start_date, end_date=self.end_date)
@@ -388,26 +415,17 @@ class Simulation:
         # Benchmark performance
         for bench in benchmark:
             df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=bench), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date]
-            ax[1][0].plot(df.index, df["AdjClose"], label=bench + "Price")
+            ax[1][0].plot(df.index, df["Close"].add(df["Dividends"].cumsum()), label=bench + "Price")
         utils.prettify_ax(ax[1][0], title="Benchmarks", start_date=self.start_date, end_date=self.end_date)
 
         # Portfolio compared to benchmarks
         ax[0][1].plot(log.index, (log[portfolio_value_column_name] / log[portfolio_value_column_name][0]), label="Portfolio")
         for bench in benchmark:
             df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=bench), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date]
-            ax[0][1].plot(df.index, (df["AdjClose"] / df["Close"][0]), label=bench)
-            if len(benchmark) > 1:
-                ax[0][1].plot(df.index, (log[portfolio_value_column_name] / log[portfolio_value_column_name][0]) / (df["Close"] / df["Close"][0]), label="PortfolioVS" + bench)
+            ax[0][1].plot(df.index, (df["Close"].add(df["Dividends"].cumsum()) / df["Close"][0]), label=bench)
+            # if len(benchmark) > 1:
+            #     ax[0][1].plot(df.index, (log[portfolio_value_column_name] / log[portfolio_value_column_name][0]) / (df["Close"] / df["Close"][0]), label="PortfolioVS" + bench)
         utils.prettify_ax(ax[0][1], title="PortfolioVSBenchmarks", start_date=self.start_date, end_date=self.end_date)
-
-        # Simulation compared to available symbols
-        if len(self.symbols) < 6:
-            ax[1][1].plot(log.index, (log[portfolio_value_column_name] / log[portfolio_value_column_name][0]), label="Portfolio")
-            for symbol in self.symbols:
-                df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date]
-                # ax[1][1].plot(df.index, (log[log.index in df.index][total_value_column_name] / log[log.index in df.index][cash_column_name][0]) / (df["Close"] / df["Close"][0]), label="PortfolioVS" + symbol)
-                ax[1][1].plot(df.index, (df["AdjClose"] / df["Close"][0]), label=symbol)
-            utils.prettify_ax(ax[1][1], title="PortfolioVSSymbols", start_date=self.start_date, end_date=self.end_date)
 
         # TODO: fix this for when not all symbols start at the same date. Fill_value=1 flattens before dates where the return can be calculated, and is inaccurate for dates after the return has already been calculated
         # Average return of available symbols
@@ -415,12 +433,22 @@ class Simulation:
             avg_return = pd.Series(0, index=self.dates)
             for symbol in self.symbols:
                 df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date]
-                avg_return = avg_return.add((df["AdjClose"] / df["Close"][0]), fill_value=1)
+                avg_return = avg_return.add((df["Close"].add(df["Dividends"].cumsum()) / df["Close"][0]), fill_value=1)
             avg_return = avg_return / len(self.symbols)
             # add this to the PortfolioVSBenchmarks graph, don't reprettify
             ax[0][1].plot(avg_return.index, avg_return, label="AverageReturnOfSymbols")
-            # add this to the PortfolioVSSymbols graph, don't reprettify
-            ax[1][1].plot(avg_return.index, avg_return, label="AverageReturnOfSymbols")
+
+        # Simulation compared to available symbols
+        if len(self.symbols) < 6:
+            ax[1][1].plot(log.index, (log[portfolio_value_column_name] / log[portfolio_value_column_name][0]), label="Portfolio")
+            for symbol in self.symbols:
+                df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date]
+                # ax[1][1].plot(df.index, (log[log.index in df.index][total_value_column_name] / log[log.index in df.index][cash_column_name][0]) / (df["Close"] / df["Close"][0]), label="PortfolioVS" + symbol)
+                ax[1][1].plot(df.index, (df["Close"].add(df["Dividends"].cumsum()) / df["Close"][0]), label=symbol)
+            # add AverageReturnOfSymbols to the PortfolioVSSymbols graph
+            if len(self.symbols) > 1:
+                ax[1][1].plot(avg_return.index, avg_return, label="AverageReturnOfSymbols")
+            utils.prettify_ax(ax[1][1], title="PortfolioVSSymbols", start_date=self.start_date, end_date=self.end_date)
 
         utils.prettify_fig(fig, title=self.filename)
         fig.savefig(utils.get_file_path(config.simulation_graphs_path, self.filename + simulation_graph_filename))
@@ -435,6 +463,7 @@ class Simulation:
         for symbol in self.symbols:
             try:
                 if utils.refresh(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), refresh=self.refresh):
+                    print("Downloading data for " + symbol)
                     prices.download_data_from_yahoo(symbol, start_date=self.start_date, end_date=self.end_date)
             except RemoteDataError:
                 print("Invalid symbol: " + symbol)
@@ -450,11 +479,11 @@ class Simulation:
 
         self.generate_signals()
 
-        self.log.loc[self.dates[0]][cash_column_name, portfolio_column_name, actions_column_name, portfolio_value_column_name] = [self.cash, self.portfolio, "Initial ", self.total_value(self.dates[0])]
+        self.log.loc[self.dates[0]][cash_column_name, portfolio_column_name, actions_column_name, portfolio_value_column_name] = [self.cash, self.portfolio, "Initial ", self.portfolio_value(self.dates[0])]
 
         try:
             for date in self.dates:
-                print(date, flush=True)
+                # print(date, flush=True)
                 for symbol in self.portfolio:
                     self.get_dividends(symbol, date)
                 for symbol in self.symbols:
@@ -468,15 +497,27 @@ class Simulation:
                     if signal == ta.soft_sell_signal and self.soft_signals and self.short_sell:
                         self.sell(symbol, date, self.purchase_size)
                 self.log.loc[date][cash_column_name, portfolio_column_name, portfolio_value_column_name, total_commission_column_name, total_dividend_column_name] \
-                    = [self.cash, self.portfolio_value(date), self.total_value(date), self.total_commissions, self.total_dividends]
+                    = [self.cash, self.format_portfolio(date), self.portfolio_value(date), self.total_commissions, self.total_dividends]
                 # Why does this line require str(self.portfolio)?
                 # self.log.loc[date][cash_column_name, portfolio_column_name, portfolio_value_column_name] = [self.cash, str(self.portfolio), self.total_value(date)]
+                self.update_purchase_size(date)
+
         except (AttributeError, KeyError) as e:
             if self.fail_gracefully:
                 print(e)
                 self.log = self.log.loc[self.log[self.log.index] < date]
             else:
                 raise
+        '''
+        for symbol in self.cost_basis:
+            if self.cost_basis[symbol] < self.get_price_on_date(symbol, date):
+                self.winners_losers["Winners"] += 1
+            else:
+                self.winners_losers["Losers"] += 1
+        '''
+
+        for symbol in self.portfolio:
+            self.sell(symbol, date)
 
         self.plot_against_benchmark(self.log, self.benchmark)
 
@@ -489,18 +530,20 @@ class Simulation:
         print("Commissions: {:.2f}".format(self.total_commissions))
         print("Total trades: {}".format(self.total_trades))
         print("Performance: {}".format(self.get_performance()))
+        print("Winners/Losers: {}".format(self.winners_losers))
+        print("Max Drawdown {:.2f}%".format(self.get_max_drawdown()))
         print("Sharpe ratios: {}".format(self.get_sharpe_ratios()))
 
-        self.log.loc[date][cash_column_name, portfolio_column_name, actions_column_name, portfolio_value_column_name] = \
-            [self.cash, self.portfolio_value(date), "Final: Performance: {} Times: {} Cache: {} Total Dividends: {:.2f} Total Commissions: {:.2f} Total Trades: {} Sharpe Ratios {}"
-                .format(self.get_performance(), self.format_times(), self.get_price_on_date.cache_info(), self.total_dividends, self.total_commissions, self.total_trades, self.get_sharpe_ratios()), self.total_value(date)]
+        self.log.loc[date][cash_column_name, portfolio_column_name, portfolio_value_column_name, actions_column_name] = \
+            [self.cash, self.format_portfolio(date), self.portfolio_value(date), "Final: Performance: {} Times: {} Cache: {} Total Dividends: {:.2f} Total Commissions: {:.2f} Total Trades: {} Winners/Losers {} Max Drawdown {:.2f}% Sharpe Ratio {}"
+                .format(self.get_performance(), self.format_times(), self.get_price_on_date.cache_info(), self.total_dividends, self.total_commissions, self.total_trades, self.winners_losers, self.get_max_drawdown(), self.get_sharpe_ratios())]
         self.log.to_csv(utils.get_file_path(config.simulation_data_path, self.filename + simulation_table_filename))
         self.log = self.log.loc[self.log[actions_column_name] != ""]  # self.log.dropna(subset=[actions_column_name], inplace=True)
         self.log.to_csv(utils.get_file_path(config.simulation_data_path, self.filename + simulation_actions_only_table_filename))
 
     # Functions for logging
 
-    def portfolio_value(self, date):
+    def format_portfolio(self, date):
         portfolio = {}
         for position in self.portfolio:
             portfolio[position] = "{:.2f}".format(self.portfolio[position] * self.get_price_on_date(position, date, time="Close"))
@@ -534,7 +577,9 @@ def update_dates_file(start_date=config.start_date, end_date=config.end_date):
 
 
 if __name__ == '__main__':
+    start_time = timer()
     '''
+    # EMA sims
     Simulation(symbols=sp.get_sp500(),
                refresh=False, filename="SP500EMA20-50",
                signal_func=ema.generate_signals, signal_func_kwargs={"period": [20, 50]})
@@ -548,18 +593,11 @@ if __name__ == '__main__':
     Simulation(symbols=sp.get_sp500(),
                refresh=False, filename="SP500EMA50-200SoftSignals", soft_signals=True,
                signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
-    #Simulation(symbols=sp.get_sp500(),
-    #           refresh=False, filename="SP500EMA50-200ShortSell", short_sell=True,
-    #           signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
     Simulation(symbols=sp.get_sp500(),
                refresh=False, filename="SP500EMA50-200PortSize20", max_portfolio_size=20,
                signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
-    Simulation(symbols=sp.get_removed_sp500(),
-               refresh=False, filename="RemovedSP500EMA50-200",
-               signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
-    Simulation(symbols=sp.get_sp500() + sp.get_removed_sp500(),
-               refresh=False, filename="CurrentAndRemovedSP500EMA50-200",
-               signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
+
+    # Other TA
     Simulation(symbols=sp.get_sp500(),
                refresh=False, filename="SP500SMA50-200",
                signal_func=sma.generate_signals, signal_func_kwargs={"period": [50, 200]})
@@ -569,12 +607,35 @@ if __name__ == '__main__':
     Simulation(symbols=sp.get_sp500(),
                refresh=False, filename="SP500RSI14",
                signal_func=rsi.generate_signals, signal_func_kwargs={"period": rsi.default_period})
+
+    # On non-SP500 symbols
+    '''
     Simulation(symbols=["SPY"],
                refresh=False, filename="SPYEMA50-200",
                signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
+    '''
     Simulation(symbols=["MSFT", "GOOG", "FB", "AAPL", "AMZN"],
                refresh=False, filename="BigNEMA50-200",
                signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
+    Simulation(symbols=sp.get_removed_sp500(),
+               refresh=False, filename="RemovedSP500EMA50-200",
+               signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
+    Simulation(symbols=sp.get_sp500() + sp.get_removed_sp500(),
+               refresh=False, filename="CurrentAndRemovedSP500EMA50-200",
+               signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
+    Simulation(symbols=pd.read_csv(utils.get_file_path(config.symbols_data_path, "RandomSymbolList1.csv"))["Symbol"].tolist(),
+               refresh=False, filename="RandomSymbols1EMA50-200",
+               signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
+    Simulation(symbols=pd.read_csv(utils.get_file_path(config.symbols_data_path, "RandomSymbolList2.csv"))["Symbol"].tolist(),
+               refresh=False, filename="RandomSymbols2EMA50-200",
+               signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
+    Simulation(symbols=pd.read_csv(utils.get_file_path(config.symbols_data_path, "RandomSymbolList3.csv"))["Symbol"].tolist(),
+               refresh=False, filename="RandomSymbols3EMA50-200",
+               signal_func=ema.generate_signals, signal_func_kwargs={"period": [50, 200]})
     '''
+    time = timer() - start_time
+    hours, rem = divmod(time, 3600)
+    minutes, seconds = divmod(rem, 60)
+    print("Total Time: {:0>2}:{:0>2}:{:05.2f}".format(int(hours), int(minutes), seconds))
 
 # Threading causes issues where, if reading shortly after file is generated, pandas will read an empty file and throw pandas.errors.EmptyDataError: No columns to parse from file

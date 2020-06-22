@@ -22,6 +22,7 @@ vix = "^VIX"
 test_symbol = "AAPL"
 broken_symbols = ["HWM", "TT", "VIAC",  # S&P500
                   "ANR", "BMC", "CA", "CBE", "CSC", "EP", "GLK", "KG", "JNY", "HNZ", "MEE", "MI", "NYX", "PCL", "PCP", "PTV", "RSH", "SAI", "SBL", "SCG", "SGP", "SLE", "SVU", "TIE", "TRB", "WFR", "XL"]  # Removed from S&P500
+all_symbols_table_filename = "AllListedSymbols.csv"  # Up to date as of April 16 2018
 
 # Date range for data, and formatting of dates for saved csvs
 start_date = datetime.date(2005, 1, 1)  # start_date = datetime.date(2003, 6, 19)  # SPY closed at 100.02 on this date
@@ -39,7 +40,7 @@ scatter_alpha = 0.7
 alpha = 0.3
 matplotlib.rcParams["figure.max_open_warning"] = 0  # matplotlib.rc("figure", max_open_warning=0)
 # Probbaly shouldn't use green or red
-matplotlib.rcParams['axes.prop_cycle'] = matplotlib.cycler(color=["blue", "green", "red", "cyan", "magenta", "yellow"])
+matplotlib.rcParams['axes.prop_cycle'] = matplotlib.cycler(color=["blue", "green", "red", "orange", "purple", "darkblue", "darkgreen", "darkred"])
 # These are the "Tableau 20" colors as RGB. Curently unused
 tableau20 = [(31, 119, 180), (174, 199, 232), (255, 127, 14), (255, 187, 120),
              (44, 160, 44), (152, 223, 138), (214, 39, 40), (255, 152, 150),
@@ -81,7 +82,7 @@ ta_graphs_path = join(ta_data_path, graphs_folder_name) if not trash_data_files 
 symbols_data_path = join(data_path, symbols_folder_name)
 sp500_symbols_data_path = join(symbols_data_path, sp500_folder_name)
 
-paths = [data_path, junk_data_path, junk_graphs_path, prices_data_path, prices_graphs_path, simulation_data_path, simulation_graphs_path, ta_data_path, ta_graphs_path, symbols_data_path, sp500_symbols_data_path]
+paths = [data_path, prices_data_path, prices_graphs_path, simulation_data_path, simulation_graphs_path, ta_data_path, ta_graphs_path, symbols_data_path, sp500_symbols_data_path]
 
 for path in paths:
     if not exists(path):

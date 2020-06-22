@@ -215,4 +215,4 @@ def plot_signals(symbol, period=default_periods, refresh=False, start_date=confi
     return fig, ax
 
 def get_signal_name(period=default_periods):
-    return "MACD" + ta.signal_name + "-".join(str(p) for p in period)
+    return "MACD" + "Signal" + "-".join(str(p) for p in period)

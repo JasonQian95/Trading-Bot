@@ -1,23 +1,11 @@
 import pandas as pd
+import numpy as np
 
 import prices
 import config
 import utils
 
 signal_name = "Signal"
-'''
-signal_funcs = {
-    "SMA": ma.generate_sma_signals,
-    "EMA": ma.generate_ema_signals,
-    "MACD": ma.generate_macd_signals
-}
-signal_names = {
-    ma.generate_sma_signals: ma.sma_name + signal_name,
-    ma.generate_ema_signals: ma.ema_name + signal_name,
-    ma.generate_macd_signals: ma.macd_name + signal_name
-}
-'''
-
 default_signal = ""
 buy_signal = "Buy"
 sell_signal = "Sell"
@@ -56,7 +44,7 @@ def get_performance(symbol, start_date=config.start_date, end_date=config.end_da
     """
 
     df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
-    return df["AdjClose"][-1] / df["Close"][0]
+    return df["Close"].add(df["Dividends"].cumsum())[-1] / df["Close"][0]
 
 
 def get_sharpe_ratio(symbol, start_date=config.start_date, end_date=config.end_date):
@@ -72,13 +60,15 @@ def get_sharpe_ratio(symbol, start_date=config.start_date, end_date=config.end_d
             The sharpe ratio of the given symbol
     """
 
-    # multiply sharpe ratios by (252 ^0.5) to annualize
     df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
-    return (df["AdjClose"] / df["AdjClose"].shift(1)).mean() / (df["AdjClose"] / df["AdjClose"].shift(1)).std()
+    return (df["Close"].add(df["Dividends"].cumsum()) / df["Close"].add(df["Dividends"].cumsum()).shift(1)).mean() / ((df["Close"].add(df["Dividends"].cumsum()) / df["Close"].add(df["Dividends"].cumsum()).shift(1)).std() * np.sqrt(252))
+    # return df["Close"].add(df["Dividends"].cumsum()).diff().mean() / df["Close"].add(df["Dividends"].cumsum()).diff().std() * np.sqrt(252)
 
 
 # Pretty sure this one is wrong. Even when no purchases are made, a non-zero sharpe ratio is returned
 # In the above sharpe ratio, for no purchases, a sharpe ratio of inf due to div by 0 is generated, which seems more correct
+# ok the above comment seems to not be true anymore but I still have no idea what this one is doing
+# this one says that the sharpe ratio of spy is 0.01?? Other one says its 5.71
 def get_sharpe_ratio2(symbol, start_date=config.start_date, end_date=config.end_date):
     """Returns the sharpe ratio of the given symbol
 
@@ -92,9 +82,9 @@ def get_sharpe_ratio2(symbol, start_date=config.start_date, end_date=config.end_
             The sharpe ratio of the given symbol
     """
 
-    # multiply sharpe ratios by (252 ^0.5) to annualize
     df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
-    big_r = df["Close"].cumsum()
+    big_r = df["Close"].add(df["Dividends"].cumsum()).cumsum()
     small_r = (big_r - big_r.shift(1)) / big_r.shift(1)
-    sharpe_ratio = small_r.mean() / small_r.std()
+    sharpe_ratio = small_r.mean() / (small_r.std() * np.sqrt(252))
     return sharpe_ratio
+
