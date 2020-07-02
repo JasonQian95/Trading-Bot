@@ -36,9 +36,6 @@ def sma(symbol, period, refresh=False, start_date=config.start_date, end_date=co
             prices.download_data_from_yahoo(symbol, start_date=start_date, end_date=end_date)
         df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), usecols=["Date", "Close"], index_col="Date", parse_dates=["Date"])[start_date:end_date]
 
-    if len(df) < period:
-        raise ta.InsufficientDataException("Not enough data to compute a period length of " + str(period))
-
     if ("SMA" + str(period)) not in df.columns:
         df["SMA" + str(period)] = df["Close"].rolling(period).mean()
         utils.debug(df["SMA" + str(period)])
@@ -116,6 +113,7 @@ def generate_signals(symbol, period=default_periods, refresh=False, start_date=c
         period = period[:2]
     period.sort()
 
+    # Why did I do this differently in plot?
     for p in period:
         sma(symbol, p, refresh=False, start_date=start_date, end_date=end_date)
     df = pd.read_csv(utils.get_file_path(config.ta_data_path, table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]

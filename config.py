@@ -27,7 +27,8 @@ all_symbols_table_filename = "AllListedSymbols.csv"  # Up to date as of April 16
 # Date range for data, and formatting of dates for saved csvs
 start_date = datetime.date(2005, 1, 1)  # start_date = datetime.date(2003, 6, 19)  # SPY closed at 100.02 on this date
 end_date = datetime.date(2020, 5, 31)  # end_date = datetime.date.today()
-date_format = "%Y_%m_%d"
+input_date_format = "%Y-%m-%d"
+output_date_format = "%Y_%m_%d"
 
 # pandas settings
 pandas.plotting.register_matplotlib_converters()

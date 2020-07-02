@@ -5,9 +5,11 @@ import pandas as pd
 
 import config
 
+import datetime
 import inspect
 import os
 from os.path import join, exists
+import sys
 
 
 def backfill(df, limit=None):
@@ -57,8 +59,8 @@ def get_file_path(path, filename, symbol="", dated=config.dated, start_date=conf
     """
 
     symbol = symbol.upper()
-    start_date = (start_date.replace("-", "_") if isinstance(start_date, str) else start_date.strftime(config.date_format))
-    end_date = (end_date.replace("-", "_") if isinstance(end_date, str) else end_date.strftime(config.date_format))
+    start_date = (start_date.replace("-", "_") if isinstance(start_date, str) else start_date.strftime(config.output_date_format))
+    end_date = (end_date.replace("-", "_") if isinstance(end_date, str) else end_date.strftime(config.output_date_format))
     return join(path, symbol + ((start_date + "-" + end_date) if dated else "") + filename)
 
 
@@ -83,6 +85,39 @@ def refresh(path, refresh=False):
         pass
         #os.remove(path)
     return not exists(path) or refresh
+
+
+def add_business_days(start_date, ndays):
+    """Adds business days to a given date. Does not account for holidays.
+
+    Parameters:
+        start_date : str, datetime
+        ndays : int
+
+    Returns:
+        date
+            The new date
+    """
+
+    is_timestamp = False
+
+    if isinstance(start_date, str):
+        current_date = datetime.datetime.strptime(start_date, config.input_date_format).date()
+    elif isinstance(start_date, pd.Timestamp):
+        current_date = start_date.date()
+        is_timestamp = True
+    else:
+        current_date = start_date
+
+    if ndays != 0:
+        sign = ndays/abs(ndays)
+        ndays = abs(ndays)
+        while ndays > 0:
+            current_date += datetime.timedelta(days=sign * 1)
+            if current_date.weekday() < 5:
+                ndays -= 1
+
+    return current_date if not is_timestamp else pd.Timestamp(current_date)
 
 
 def prettify_ax(ax, title="", center=False, percentage=False, start_date=config.start_date, end_date=config.end_date):
@@ -158,6 +193,17 @@ def prettify_fig(fig, title=""):
     fig.set_size_inches(config.figsize)  # currently I always set this when creating the fig
     fig.suptitle(title)
     fig.tight_layout()
+
+
+# This class is to mute the annoying yfinance prints on errors.
+class HiddenPrints:
+    def __enter__(self):
+        self._original_stdout = sys.stdout
+        sys.stdout = open(os.devnull, 'w')
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        sys.stdout.close()
+        sys.stdout = self._original_stdout
 
 
 def debug(s, debug=False):

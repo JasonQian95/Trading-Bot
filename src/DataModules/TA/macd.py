@@ -38,8 +38,6 @@ def macd(symbol, period=default_periods, refresh=False, start_date=config.start_
 
     if len(period) != 3:
         raise ValueError("MACD requires 3 periods")
-    if len(df) < period[-1]:
-        raise ta.InsufficientDataException("Not enough data to compute a period length of " + str(period))
 
     macd_column_name = "MACD" + str(period[1]) + "-" + str(period[2])
     signal_column_name = "MACD" + str(period[0])
@@ -139,6 +137,7 @@ def generate_signals(symbol, period=default_periods, refresh=False, start_date=c
     if len(period) != 3:
         raise ValueError("MACD requires 3 periods")
 
+    # Why did I do this differently in plot?
     macd(symbol, period, refresh=False, start_date=start_date, end_date=end_date)
     df = pd.read_csv(utils.get_file_path(config.ta_data_path, table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
 
@@ -216,3 +215,4 @@ def plot_signals(symbol, period=default_periods, refresh=False, start_date=confi
 
 def get_signal_name(period=default_periods):
     return "MACD" + "Signal" + "-".join(str(p) for p in period)
+

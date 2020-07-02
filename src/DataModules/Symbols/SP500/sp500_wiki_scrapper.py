@@ -43,7 +43,7 @@ def get_sp500(refresh=False):
     df = pd.read_csv(sp500_symbols_table_path)
     df = df[~df[symbol_column_name].isin(config.broken_symbols)]
     utils.debug(df[symbol_column_name])
-    return df[symbol_column_name].tolist()
+    return sorted(df[symbol_column_name].tolist())
 
 
 def get_sp500_by_sector(sector):
@@ -67,7 +67,7 @@ def get_sp500_by_sector(sector):
     elif isinstance(sector, list):
         df = df.loc[df[sector_column_name].isin(sector)]
     utils.debug(df[symbol_column_name])
-    return df[symbol_column_name].tolist()
+    return sorted(df[symbol_column_name].tolist())
 
 
 def get_sp500_by_sub_sector(sector):
@@ -91,7 +91,7 @@ def get_sp500_by_sub_sector(sector):
     elif isinstance(sector, list):
         df = df.loc[df[sub_sector_column_name].isin(sector)]
     utils.debug(df[symbol_column_name])
-    return df[symbol_column_name].tolist()
+    return sorted(df[symbol_column_name].tolist())
 
 
 def get_all_sp500_sectors():
@@ -150,4 +150,4 @@ def get_removed_sp500(refresh=False):
     df = pd.read_csv(sp500_removed_symbols_table_path)
     df = df[~df[symbol_column_name].isin(config.broken_symbols)]
     utils.debug(df[symbol_column_name])
-    return df[symbol_column_name].tolist()
+    return sorted(df[symbol_column_name].tolist())

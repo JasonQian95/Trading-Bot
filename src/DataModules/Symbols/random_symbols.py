@@ -21,5 +21,4 @@ def get_random_symbols(num=100):
     random_list = []
     for s in range(1, num):
         random_list.append(random.choice(symbol_list))
-    return random_list
-
+    return sorted(random_list)

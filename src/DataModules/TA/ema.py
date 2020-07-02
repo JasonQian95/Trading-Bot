@@ -7,6 +7,8 @@ import config
 import utils
 import tautils as ta
 
+from pandas_datareader._utils import RemoteDataError
+
 table_filename = "EMA.csv"
 graph_filename = "EMA.png"
 
@@ -37,9 +39,6 @@ def ema(symbol, period, refresh=False, start_date=config.start_date, end_date=co
         if utils.refresh(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), refresh=refresh):
             prices.download_data_from_yahoo(symbol, start_date=start_date, end_date=end_date)
         df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), usecols=["Date", "Close"], index_col="Date", parse_dates=["Date"])[start_date:end_date]
-
-    if len(df) < period:
-        raise ta.InsufficientDataException("Not enough data to compute a period length of " + str(period))
 
     if ("EMA" + str(period)) not in df.columns:
         df["EMA" + str(period)] = df["Close"].ewm(span=period, min_periods=period, adjust=False).mean()
@@ -76,7 +75,7 @@ def plot_ema(symbol, period=default_periods, refresh=False, start_date=config.st
     period.sort()
 
     if len(df) < period[-1]:
-        raise ta.InsufficientDataException("Not enough data to compute a period length of " + str(period))
+        raise ta.InsufficientDataException("Not enough data to compute a period length of " + str(period[-1]))
 
     fig, ax = plt.subplots(figsize=config.figsize)
     ax.plot(df.index, df["Close"], label="Price")
@@ -118,6 +117,7 @@ def generate_signals(symbol, period=default_periods, refresh=False, start_date=c
         period = period[:2]
     period.sort()
 
+    # Why did I do this differently in plot?
     for p in period:
         ema(symbol, p, refresh=False, start_date=start_date, end_date=end_date)
     df = pd.read_csv(utils.get_file_path(config.ta_data_path, table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]

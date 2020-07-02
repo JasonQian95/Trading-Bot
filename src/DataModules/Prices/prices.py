@@ -49,7 +49,8 @@ def download_data_from_yahoo(symbol, adjust=True, backfill=False, start_date=con
             A dataframe containing high, low, open, close, volume, and adjusted close by date for the given symbol
     """
 
-    df = yf.Ticker(symbol).history(auto_adjust=False, start=start_date, end=end_date)
+    with utils.HiddenPrints():
+        df = yf.Ticker(symbol).history(auto_adjust=False, start=start_date, end=end_date)
 
     # This causes an error with pandas, so we're using yfinance instead
     # if dividends causes errors, go to the error and remove the 'eval'
@@ -314,8 +315,8 @@ def after_during_hours_returns(symbol, period=0, refresh=False, start_date=confi
     ax[0].plot(df.index, df[total_during_hours_name], label=total_during_hours_name)
 
     if config.debug:
-        during_hours_cum_sum = pd.Series(df["Close"] - df["Close"].shift(1)).cumsum()
-        df[total_return_name] = during_hours_cum_sum + df["Close"][0]
+        all_hours_cum_sum = pd.Series(df["Close"] - df["Close"].shift(1)).cumsum()
+        df[total_return_name] = all_hours_cum_sum + df["Close"][0]
         ax[0].plot(df.index, df[total_return_name], label=total_return_name)
         df = df[["Open", "Close", total_after_hours_name, total_during_hours_name, total_return_name if total_return_name in df.columns else None]]
         df.to_csv(utils.get_file_path(config.prices_data_path, during_and_after_hours_table_filename, symbol=symbol))

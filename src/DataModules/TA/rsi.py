@@ -40,9 +40,6 @@ def rsi(symbol, period=default_period, refresh=False, start_date=config.start_da
             prices.download_data_from_yahoo(symbol, start_date=start_date, end_date=end_date)
         df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), usecols=["Date", "Close"], index_col="Date", parse_dates=["Date"])[start_date:end_date]
 
-    if len(df) < period:
-        raise ta.InsufficientDataException("Not enough data to compute a period length of " + str(period))
-
     if ("RSI" + str(period)) not in df.columns:
         delta = df["Close"].diff()
         up, down = delta.copy(), delta.copy()
@@ -116,6 +113,7 @@ def generate_signals(symbol, period=default_period, refresh=False, start_date=co
             A dataframe containing the rsi signals for the given symbol
     """
 
+    # Why did I do this differently in plot?
     rsi(symbol, period=period, refresh=refresh, start_date=start_date, end_date=end_date)
     df = pd.read_csv(utils.get_file_path(config.ta_data_path, table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
 
@@ -135,6 +133,7 @@ def generate_signals(symbol, period=default_period, refresh=False, start_date=co
         df.to_csv(utils.get_file_path(config.ta_data_path, table_filename, symbol=symbol))
 
     return df[signal_column_name]
+
 
 def plot_signals(symbol, period=default_period, refresh=False, start_date=config.start_date, end_date=config.end_date):
     """Plots the rsi buy/sell signals for the given symbol, saves this data in a .csv file, and plots this data. Only uses the first and last periods
