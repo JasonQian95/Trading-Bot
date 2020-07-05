@@ -15,14 +15,12 @@ import utils
 import tautils as ta
 
 from collections import OrderedDict
-import datetime
 from enum import Enum
 from functools import lru_cache
 import inspect
 import os
 from pandas_datareader._utils import RemoteDataError
 import psutil
-from threading import Thread
 from timeit import default_timer as timer
 
 
@@ -67,7 +65,7 @@ class Operation(Enum):
 
 class Simulation:
 
-    def __init__(self, filename="", initial_cash=100000, symbols=["SPY"], benchmark=["SPY"],
+    def __init__(self, filename="", initial_cash=100000, symbols=["SPY"], benchmark=["SPY", "RSP"],
                  commission=default_commission, max_portfolio_size=100,  soft_signals=False, slippage=0,
                  short_sell=False, partial_shares=False, stop_loss_limit=1.0,
                  fail_gracefully=False, refresh=False, start_date=config.start_date, end_date=config.end_date,
@@ -471,16 +469,16 @@ class Simulation:
             ax[1][0].plot(df.index, df["Close"].add(df["Dividends"].cumsum()), label=bench + "Price")
         utils.prettify_ax(ax[1][0], title="Benchmarks", start_date=self.start_date, end_date=self.end_date)
 
-        # TODO: fix this for when not all symbols start at the same date. Fill_value=1 flattens before dates where the return can be calculated, and is inaccurate for dates after the return has already been calculated
+        # Fix this for when not all symbols start at the same date. Fill_value=1 flattens before dates where the return can be calculated, and is inaccurate for dates after the return has already been calculated
         # Average return of available symbols
         if len(self.symbols) > 1:
             avg_return = pd.Series(0, index=self.dates)
-            count = pd.Series(0, index=self.dates)
+            # count = pd.Series(0, index=self.dates)
             for symbol in self.symbols:
                 df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date]
                 avg_return = avg_return.add((df["Close"].add(df["Dividends"].cumsum()) / df["Close"][0]), fill_value=1)
-                count = count.add(self.dates.isin(df.index).astype(int))
-            avg_return = avg_return / count
+                # count = count.add(self.dates.isin(df.index).astype(int))
+            avg_return = avg_return / len(self.symbols)
 
         # Portfolio compared to benchmarks
         ax[0][1].plot(log.index, (log[portfolio_value_column_name] / log[portfolio_value_column_name][0]), label="Portfolio")
@@ -705,7 +703,6 @@ if __name__ == '__main__':
                refresh=False, filename="SP500EMA50-200Slippage", slippage=1,
                signal_func=ema, signal_func_kwargs={"period": [50, 200]})
 
-
     # Other TA
     Simulation(symbols=sp.get_sp500(),
                refresh=False, filename="SP500SMA20-50",
@@ -736,22 +733,24 @@ if __name__ == '__main__':
     Simulation(symbols=["MSFT", "GOOG", "FB", "AAPL", "AMZN"],
                refresh=False, filename="BigNEMA50-200",
                signal_func=ema, signal_func_kwargs={"period": [50, 200]})
-    Simulation(symbols=sp.get_removed_sp500(),
-               refresh=False, filename="RemovedSP500EMA50-200",
-               signal_func=ema, signal_func_kwargs={"period": [50, 200]})
-    Simulation(symbols=sp.get_sp500() + sp.get_removed_sp500(),
-               refresh=False, filename="CurrentAndRemovedSP500EMA50-200",
-               signal_func=ema, signal_func_kwargs={"period": [50, 200]})
-    Simulation(symbols=pd.read_csv(utils.get_file_path(config.symbols_data_path, "RandomSymbolList1.csv"))["Symbol"].tolist(),
-               refresh=False, filename="RandomSymbols1EMA50-200",
-               signal_func=ema, signal_func_kwargs={"period": [50, 200]})
-    Simulation(symbols=pd.read_csv(utils.get_file_path(config.symbols_data_path, "RandomSymbolList2.csv"))["Symbol"].tolist(),
-               refresh=False, filename="RandomSymbols2EMA50-200",
-               signal_func=ema, signal_func_kwargs={"period": [50, 200]})
-    Simulation(symbols=pd.read_csv(utils.get_file_path(config.symbols_data_path, "RandomSymbolList3.csv"))["Symbol"].tolist(),
-               refresh=False, filename="RandomSymbols3EMA50-200",
-               signal_func=ema, signal_func_kwargs={"period": [50, 200]})
+    
+    # random symbols
+    for func in [ema, sma, macd, rsi, bb]:
+        Simulation(symbols=pd.read_csv(utils.get_file_path(config.symbols_data_path, "RandomSymbolList1.csv"))["Symbol"].tolist(),
+                   refresh=False, filename="RandomSymbols1" + func.get_signal_name(),
+                   signal_func=func)
+        Simulation(symbols=pd.read_csv(utils.get_file_path(config.symbols_data_path, "RandomSymbolList2.csv"))["Symbol"].tolist(),
+                   refresh=False, filename="RandomSymbols2" + func.get_signal_name(),
+                   signal_func=func)
+        Simulation(symbols=pd.read_csv(utils.get_file_path(config.symbols_data_path, "RandomSymbolList3.csv"))["Symbol"].tolist(),
+                   refresh=False, filename="RandomSymbols3" + func.get_signal_name(),
+                   signal_func=func)
 
+    # random walks
+    for func in [ema, sma, macd, rsi, bb]:
+        Simulation(symbols=["RandomWalk1", "RandomWalk2", "RandomWalk3", "RandomWalk4", "RandomWalk5"],
+                   refresh=False, filename="RandomWalk" + func.get_signal_name(),
+                   signal_func=func)
 
     time = timer() - start_time
     hours, rem = divmod(time, 3600)

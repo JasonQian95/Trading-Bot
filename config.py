@@ -20,8 +20,8 @@ index = "SPY"
 sp500 = "^GSPC"
 vix = "^VIX"
 test_symbol = "AAPL"
-broken_symbols = ["HWM", "TT", "VIAC",  # S&P500
-                  "ANR", "BMC", "CA", "CBE", "CSC", "EP", "GLK", "KG", "JNY", "HNZ", "MEE", "MI", "NYX", "PCL", "PCP", "PTV", "RSH", "SAI", "SBL", "SCG", "SGP", "SLE", "SVU", "TIE", "TRB", "WFR", "XL"]  # Removed from S&P500
+broken_symbols = ["HWM", "TT", "VIAC"]  # S&P500
+# "ANR", "BMC", "CA", "CBE", "CSC", "EP", "GLK", "KG", "JNY", "HNZ", "MEE", "MI", "NYX", "PCL", "PCP", "PTV", "RSH", "SAI", "SBL", "SCG", "SGP", "SLE", "SVU", "TIE", "TRB", "WFR", "XL"  # Removed from S&P500
 all_symbols_table_filename = "AllListedSymbols.csv"  # Up to date as of April 16 2018
 
 # Date range for data, and formatting of dates for saved csvs
@@ -66,8 +66,10 @@ junk_folder_name = "Junk"
 prices_folder_name = "Prices"
 simulation_folder_name = "Simulation"
 ta_folder_name = "TA"
+screener_folder_name = "Screener"
 symbols_folder_name = "SymbolLists"
 sp500_folder_name = "SP500"
+random_walk_folder_name = "RandomWalk"
 
 graphs_folder_name = "Graphs"
 
@@ -80,10 +82,14 @@ simulation_data_path = join(data_path, simulation_folder_name)
 simulation_graphs_path = join(simulation_data_path, graphs_folder_name)
 ta_data_path = join(data_path, ta_folder_name) if not trash_data_files else junk_data_path
 ta_graphs_path = join(ta_data_path, graphs_folder_name) if not trash_data_files else junk_graphs_path
+screener_data_path = join(data_path, screener_folder_name)
 symbols_data_path = join(data_path, symbols_folder_name)
 sp500_symbols_data_path = join(symbols_data_path, sp500_folder_name)
+random_walk_data_path = join(data_path, random_walk_folder_name)
+random_walk_graphs_path = join(random_walk_data_path, graphs_folder_name)
 
-paths = [data_path, prices_data_path, prices_graphs_path, simulation_data_path, simulation_graphs_path, ta_data_path, ta_graphs_path, symbols_data_path, sp500_symbols_data_path]
+
+paths = [data_path, prices_data_path, prices_graphs_path, simulation_data_path, simulation_graphs_path, ta_data_path, ta_graphs_path, screener_data_path, symbols_data_path, sp500_symbols_data_path, random_walk_data_path, random_walk_graphs_path]
 
 for path in paths:
     if not exists(path):

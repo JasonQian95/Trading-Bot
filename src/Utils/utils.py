@@ -58,10 +58,10 @@ def get_file_path(path, filename, symbol="", dated=config.dated, start_date=conf
             A file path combining the given data
     """
 
-    symbol = symbol.upper()
+    # symbol = symbol.upper()
     start_date = (start_date.replace("-", "_") if isinstance(start_date, str) else start_date.strftime(config.output_date_format))
     end_date = (end_date.replace("-", "_") if isinstance(end_date, str) else end_date.strftime(config.output_date_format))
-    return join(path, symbol + ((start_date + "-" + end_date) if dated else "") + filename)
+    return join(path, symbol + ((start_date + ("-" if start_date != "" else "") + end_date) if dated else "") + filename)
 
 
 def refresh(path, refresh=False):
