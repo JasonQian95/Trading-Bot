@@ -8,9 +8,9 @@ import utils
 import tautils as ta
 
 table_filename = "SMA.csv"
-graph_filename = "SMA.png"
+graph_filename = ".png"
 
-default_periods = [20, 50, 200]
+default_periods = [50, 200]
 
 
 def sma(symbol, period, refresh=False, start_date=config.start_date, end_date=config.end_date):
@@ -85,13 +85,13 @@ def plot_sma(symbol, period=default_periods, refresh=False, start_date=config.st
     utils.prettify_ax(ax, title=symbol + "SMA" + "-".join(str(p) for p in period), start_date=start_date, end_date=end_date)
 
     utils.prettify_fig(fig)
-    fig.savefig(utils.get_file_path(config.ta_graphs_path, "-".join(str(p) for p in period) + graph_filename, symbol=symbol))
+    fig.savefig(utils.get_file_path(config.ta_graphs_path, get_signal_name(period) + graph_filename, symbol=symbol))
     utils.debug(fig)
     return fig, ax
 
 
 def generate_signals(symbol, period=default_periods, refresh=False, start_date=config.start_date, end_date=config.end_date):
-    """Calculates the simple moving agerage and buy/sell signals for each period for the given symbol, saves this data in a .csv file, and plots this data. Only uses the first and last periods
+    """Calculates the simple moving agerage and buy/sell signals for each period for the given symbol, saves this data in a .csv file, and plots this data.
     The SMA is a lagging trend indicator.
 
     Parameters:
@@ -107,10 +107,8 @@ def generate_signals(symbol, period=default_periods, refresh=False, start_date=c
             A dataframe containing the simple moving agerage signals for the given symbol
     """
 
-    if len(period) < 2:
-        raise ValueError("Requires at least two periods")
-    if len(period) > 2:
-        period = period[:2]
+    if len(period) != 2:
+        raise ValueError("Requires at two periods")
     period.sort()
 
     # Why did I do this differently in plot?
@@ -138,7 +136,7 @@ def generate_signals(symbol, period=default_periods, refresh=False, start_date=c
 
 
 def plot_signals(symbol, period=default_periods, refresh=False, start_date=config.start_date, end_date=config.end_date):
-    """Plots the simple moving agerage and buy/sell signals for each period for the given symbol, saves this data in a .csv file, and plots this data. Only uses the first and last periods
+    """Plots the simple moving agerage and buy/sell signals for each period for the given symbol, saves this data in a .csv file, and plots this data.
     The SMA is a lagging trend indicator.
 
     Parameters:
@@ -154,10 +152,8 @@ def plot_signals(symbol, period=default_periods, refresh=False, start_date=confi
             A figure and axes containing the simple moving agerage signals for the given symbol
     """
 
-    if len(period) < 2:
-        raise ValueError("Requires at least two periods")
-    if len(period) > 2:
-        period = period[:2]
+    if len(period) != 2:
+        raise ValueError("Requires at two periods")
     period.sort()
 
     generate_signals(symbol, period=period, refresh=refresh, start_date=start_date, end_date=end_date)
@@ -187,11 +183,11 @@ def plot_signals(symbol, period=default_periods, refresh=False, start_date=confi
     utils.prettify_ax(ax, title=symbol + signal_column_name, start_date=start_date, end_date=end_date)
 
     utils.prettify_fig(fig)
-    fig.savefig(utils.get_file_path(config.ta_graphs_path, "-".join(str(p) for p in period) + graph_filename, symbol=symbol))
+    fig.savefig(utils.get_file_path(config.ta_graphs_path, get_signal_name(period) + graph_filename, symbol=symbol))
     utils.debug(fig)
 
     return fig, ax
 
 
 def get_signal_name(period=default_periods):
-    return "SMA" + "Signal" + str(period[0]) + "-" + str(period[1])
+    return "SMA" + "Signal" + "-".join(str(p) for p in period)

@@ -8,12 +8,10 @@ import utils
 import tautils as ta
 
 table_filename = "RSI.csv"
-
-rsi_graph_filename = "RSI.png"
-rsi_table_filename = "RSI.csv"
+graph_filename = ".png"
 
 default_period = 14
-rsi_thresholds = {"Low": 30, "High": 70}  # Oversold and overbought
+default_thresholds = {"Low": 30, "High": 70}  # Oversold and overbought
 
 
 # TODO: This is the ema rsi. Commercial software generally use Wilder's smoothed moving average
@@ -51,13 +49,15 @@ def rsi(symbol, period=default_period, refresh=False, start_date=config.start_da
     return df["RSI" + str(period)]
 
 
-def plot_rsi(symbol, period=default_period, refresh=False, start_date=config.start_date, end_date=config.end_date):
+def plot_rsi(symbol, period=default_period, thresholds=default_thresholds, refresh=False, start_date=config.start_date, end_date=config.end_date):
     """Calculates the relative strength index for each period for the given symbol, saves this data in a .csv file, and plots this data
     The RSI is a leading momentum indicator.
 
     Parameters:
         symbol : str
         period : int, optional
+        thresholds: dict
+            Must contain keys "Low" and "High", both with a value between 0 and 100
         refresh : bool, optional
         start_date : date, optional
         end_date : date, optional
@@ -84,26 +84,27 @@ def plot_rsi(symbol, period=default_period, refresh=False, start_date=config.sta
         df = df.join(rsi(symbol, period, refresh=False, start_date=start_date, end_date=end_date))
     # if len(df) > period:  # to prevent AttributeError when the column is all None
     ax[1].plot(df.index, df["RSI" + str(period)], label="RSI" + str(period))
-    ax[1].plot(df.index, [rsi_thresholds["Low"]] * len(df.index), label="Oversold", color="red")
+    ax[1].plot(df.index, [thresholds["Low"]] * len(df.index), label="Oversold", color="red")
     ax[1].plot(df.index, [50] * len(df.index), color="black")
-    ax[1].plot(df.index, [rsi_thresholds["High"]] * len(df.index), label="Overbought", color="red")
+    ax[1].plot(df.index, [thresholds["High"]] * len(df.index), label="Overbought", color="red")
 
     utils.prettify_ax(ax[1], title=symbol + "RSI" + str(period), start_date=start_date, end_date=end_date)
 
     utils.prettify_fig(fig)
-    fig.savefig(utils.get_file_path(config.ta_graphs_path, str(period) + rsi_graph_filename, symbol=symbol))
+    fig.savefig(utils.get_file_path(config.ta_graphs_path, get_signal_name(period) + graph_filename, symbol=symbol))
     utils.debug(fig)
     return fig, ax
 
 
-def generate_signals(symbol, period=default_period, refresh=False, start_date=config.start_date, end_date=config.end_date):
+def generate_signals(symbol, period=default_period, thresholds=default_thresholds, refresh=False, start_date=config.start_date, end_date=config.end_date):
     """Calculates the rsi buy/sell signals for the given symbol, saves this data in a .csv file, and plots this data. Only uses the first and last periods
     The RSI is a leading momentum indicator.
 
     Parameters:
         symbol : str
-        period : int or list of int, optional
-            Must contain 3 values. First value is signal line, second is fast line, third is slow line.
+        period : int, optional
+        thresholds: dict
+            Must contain keys "Low" and "High", both with a value between 0 and 100
         refresh : bool, optional
         start_date : date, optional
         end_date : date, optional
@@ -122,8 +123,8 @@ def generate_signals(symbol, period=default_period, refresh=False, start_date=co
         rsi_column_name = "RSI" + str(period)
 
         conditions = [
-            (df[rsi_column_name].shift(1) > rsi_thresholds["Low"]) & (df[rsi_column_name] < rsi_thresholds["Low"]),  # rsi breaches lower threshold, buy signal
-            (df[rsi_column_name].shift(1) < rsi_thresholds["High"]) & (df[rsi_column_name] > rsi_thresholds["High"]),  # rsi breaches upper threshold, buy signal
+            (df[rsi_column_name].shift(1) > thresholds["Low"]) & (df[rsi_column_name] < thresholds["Low"]),  # rsi breaches lower threshold, buy signal
+            (df[rsi_column_name].shift(1) < thresholds["High"]) & (df[rsi_column_name] > thresholds["High"]),  # rsi breaches upper threshold, buy signal
             False,  # (df[rsi_column_name].shift(1) > rsi_thresholds["Low"]) & (df[rsi_column_name] < rsi_thresholds["Low"]),  # rsi breaches 50 after a buy signal, soft sell
             False   # (df[rsi_column_name].shift(1) < rsi_thresholds["High"]) & (df[rsi_column_name] > rsi_thresholds["High"])  # rsi breaches 50 after a sell signal, soft buy
         ]
@@ -135,14 +136,15 @@ def generate_signals(symbol, period=default_period, refresh=False, start_date=co
     return df[signal_column_name]
 
 
-def plot_signals(symbol, period=default_period, refresh=False, start_date=config.start_date, end_date=config.end_date):
+def plot_signals(symbol, period=default_period, thresholds=default_thresholds, refresh=False, start_date=config.start_date, end_date=config.end_date):
     """Plots the rsi buy/sell signals for the given symbol, saves this data in a .csv file, and plots this data. Only uses the first and last periods
     The RSI is a leading momentum indicator.
 
     Parameters:
         symbol : str
-        period : int or list of int, optional
-            Must contain 3 values. First value is signal line, second is fast line, third is slow line.
+        period : int, optional
+        thresholds: dict
+            Must contain keys "Low" and "High", both with a value between 0 and 100
         refresh : bool, optional
         start_date : date, optional
         end_date : date, optional
@@ -152,7 +154,7 @@ def plot_signals(symbol, period=default_period, refresh=False, start_date=config
             A figure and axes containing the rsi signals for the given symbol
     """
 
-    generate_signals(symbol, period=period, refresh=refresh, start_date=start_date, end_date=end_date)
+    generate_signals(symbol, period=period, thresholds=thresholds, refresh=refresh, start_date=start_date, end_date=end_date)
     fig, ax = plot_rsi(symbol, period=period, refresh=refresh, start_date=start_date, end_date=end_date)
     df = pd.read_csv(utils.get_file_path(config.ta_data_path, table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
 
@@ -171,11 +173,12 @@ def plot_signals(symbol, period=default_period, refresh=False, start_date=config
     utils.prettify_ax(ax[1], title=symbol + signal_column_name, percentage=True, start_date=start_date, end_date=end_date)
 
     utils.prettify_fig(fig)
-    fig.savefig(utils.get_file_path(config.ta_graphs_path, str(period) + rsi_graph_filename, symbol=symbol))
+    fig.savefig(utils.get_file_path(config.ta_graphs_path, get_signal_name(period) + graph_filename, symbol=symbol))
     utils.debug(fig)
 
     return fig, ax
 
 
-def get_signal_name(period=default_period):
-    return "RSI" + "Signal" + str(period)
+def get_signal_name(period=default_period, thresholds=default_thresholds):
+    return "RSI" + "Signal" + str(period) + "-" + str(thresholds["Low"]) + "-" + str(thresholds["High"])
+

@@ -20,7 +20,8 @@ index = "SPY"
 sp500 = "^GSPC"
 vix = "^VIX"
 test_symbol = "AAPL"
-broken_symbols = ["HWM", "TT", "VIAC"]  # S&P500
+broken_symbols = ["HWM", "TT", "VIAC",  # S&P500
+                  "MTA", "PIPR"]  # random symbols
 # "ANR", "BMC", "CA", "CBE", "CSC", "EP", "GLK", "KG", "JNY", "HNZ", "MEE", "MI", "NYX", "PCL", "PCP", "PTV", "RSH", "SAI", "SBL", "SCG", "SGP", "SLE", "SVU", "TIE", "TRB", "WFR", "XL"  # Removed from S&P500
 all_symbols_table_filename = "AllListedSymbols.csv"  # Up to date as of April 16 2018
 

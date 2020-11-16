@@ -7,6 +7,8 @@ import ema
 import macd
 import rsi
 import sma
+import volforecast
+import volcontango
 
 import prices
 import sp500_wiki_scrapper as sp
@@ -15,6 +17,7 @@ import utils
 import tautils as ta
 
 from collections import OrderedDict
+import datetime
 from enum import Enum
 from functools import lru_cache
 import inspect
@@ -66,8 +69,8 @@ class Operation(Enum):
 class Simulation:
 
     def __init__(self, filename="", initial_cash=100000, symbols=["SPY"], benchmark=["SPY", "RSP"],
-                 commission=default_commission, max_portfolio_size=100,  soft_signals=False, slippage=0,
-                 short_sell=False, partial_shares=False, stop_loss_limit=1.0,
+                 commission=default_commission, max_portfolio_size=100, soft_signals=False, iterate_over_symbols=False,
+                 slippage=0, short_sell=False, partial_shares=False, stop_loss_limit=1.0,
                  fail_gracefully=False, refresh=False, start_date=config.start_date, end_date=config.end_date,
                  signal_func=None, signal_func_args=[], signal_func_kwargs={}):
 
@@ -93,6 +96,7 @@ class Simulation:
         self.stop_loss_limit = stop_loss_limit
         self.fail_gracefully = fail_gracefully
         self.refresh = refresh
+        self.iterate_over_symbols = iterate_over_symbols
         self.start_date = start_date
         self.end_date = end_date
         self.signal_func = signal_func.generate_signals
@@ -141,7 +145,10 @@ class Simulation:
         if purchase_size == 0:
             purchase_size = self.purchase_size
 
-        if self.cash < purchase_size:
+        if self.cash < purchase_size and self.max_portfolio_size != 2:
+            # this is ok specifically for trading a pair of stocks, where we want to go all in on the position every time.
+            # in this case, whether we will have cash at time of buy depends on whether we have already sold or not
+            # to make it so that the order in which we buy stock A and sell stock B doesn't matter, skip this check in this scenerio
             self.log.loc[date][actions_column_name] = self.log.loc[date][actions_column_name] + "Unable to buy {} ".format(symbol)
             # purchase_size = self.cash
         elif symbol not in self.portfolio:
@@ -344,7 +351,10 @@ class Simulation:
             date : datetime
         """
 
-        self.purchase_size = (self.portfolio_value(date) // min(self.max_portfolio_size, len(self.symbols) // 5 + 1)) - (self.commission[maximum_commission] if maximum_commission in self.commission else 0)
+        if self.portfolio_value(date) > 0:
+            self.purchase_size = (self.portfolio_value(date) // min(self.max_portfolio_size, len(self.symbols) // 5 + 1)) - (self.commission[maximum_commission] if maximum_commission in self.commission else 0)
+        else:
+            self.purchase_size = 0
 
     def set_stop_loss(self, symbol, date, func):
         """Sets initial values in the stop loss dictionary when buying and removes entries when selling
@@ -373,29 +383,35 @@ class Simulation:
             elif self.stop_loss[symbol] * (1 - self.stop_loss_limit) > self.get_price_on_date(symbol, date):
                 self.sell(symbol, date)
 
-    def generate_signals(self):
+    def generate_signals(self, iterate_over_symbols=False):
         """Generates signals for all symbols
+
+        Parameters:
+            iterate_over_symbols : boolean
+                True if the signal function does not take in a symbol
         """
 
         start_time = timer()
 
-        count = 0
-        for symbol in self.symbols:
-            # print("Generating signals for " + symbol, flush=True)
-            try:
-                count += 1
-                self.signal_func(symbol, *self.signal_func_args, **self.signal_func_kwargs, refresh=self.refresh, start_date=self.start_date, end_date=self.end_date)
-                # TODO make this work for multiple signal funcs, this will require some backfill
-                '''
-                for i, func in enumerate(signal_func):
-                    func(symbol, *args[i], refresh=refresh, start_date=start_date, end_date=end_date, **kwargs[i])
-                '''
-            except ta.InsufficientDataException:
-                print("Insufficient data for " + symbol)
-                self.symbols.remove(symbol)
-            except RemoteDataError:
-                print("Invalid symbol: " + symbol)
-                self.symbols.remove(symbol)
+        iterate_over_symbols = self.iterate_over_symbols
+        if iterate_over_symbols:
+            self.signal_func(*self.signal_func_args, **self.signal_func_kwargs, refresh=self.refresh, start_date=self.start_date, end_date=self.end_date)
+        else:
+            for symbol in self.symbols:
+                # print("Generating signals for " + symbol, flush=True)
+                try:
+                    self.signal_func(symbol, *self.signal_func_args, **self.signal_func_kwargs, refresh=self.refresh, start_date=self.start_date, end_date=self.end_date)
+                    # TODO make this work for multiple signal funcs, this will require some backfill
+                    '''
+                    for i, func in enumerate(signal_func):
+                        func(symbol, *args[i], refresh=refresh, start_date=start_date, end_date=end_date, **kwargs[i])
+                    '''
+                except ta.InsufficientDataException:
+                    print("Insufficient data for " + symbol)
+                    self.symbols.remove(symbol)
+                except RemoteDataError:
+                    print("Invalid symbol: " + symbol)
+                    self.symbols.remove(symbol)
 
         self.times[generate_signals_time] = self.times[generate_signals_time] + timer() - start_time
 
@@ -656,7 +672,10 @@ class Simulation:
         return performances
 
     def get_sharpe_ratios(self):
-        sharpe_ratios = {"Portfolio": "{:.2f}".format(self.log[portfolio_value_column_name].pct_change().mean() / self.log[portfolio_value_column_name].pct_change().std() * np.sqrt(252))}
+        try:
+            sharpe_ratios = {"Portfolio": "{:.2f}".format(self.log[portfolio_value_column_name].pct_change().mean() / self.log[portfolio_value_column_name].pct_change().std() * np.sqrt(252))}
+        except ZeroDivisionError: # no trades made
+            sharpe_ratios = {"Portfolio": "{:.2f}".format(0)}
         for bench in self.benchmark:
             sharpe_ratios[bench] = "{:.2f}".format(ta.get_sharpe_ratio(bench, self.start_date, self.end_date))
         return sharpe_ratios
@@ -679,9 +698,25 @@ def update_dates_file(start_date=config.start_date, end_date=config.end_date):
     df.to_csv(utils.get_file_path(config.simulation_data_path, dates_table_filename), columns=[])
 
 
+def calculate_average_return(symbols):
+    average = 0
+    count = 0
+    for symbol in symbols:
+        if symbol not in config.broken_symbols:
+            try:
+                df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])
+                count += 1
+            except FileNotFoundError:
+                pass
+            average += df["Close"].add(df["Dividends"].cumsum())[-1] / df["Close"][0]
+    average = average / count
+    print(average)
+
+
 if __name__ == '__main__':
     start_time = timer()
 
+    '''
     # EMA sims
     Simulation(symbols=sp.get_sp500(),
                refresh=False, filename="SP500EMA20-50",
@@ -695,9 +730,6 @@ if __name__ == '__main__':
                signal_func=ema, signal_func_kwargs={"period": [50, 200]})
     Simulation(symbols=sp.get_sp500(),
                refresh=False, filename="SP500EMA50-200SoftSignals", soft_signals=True,
-               signal_func=ema, signal_func_kwargs={"period": [50, 200]})
-    Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500EMA50-200PortSize20", max_portfolio_size=20,
                signal_func=ema, signal_func_kwargs={"period": [50, 200]})
     Simulation(symbols=sp.get_sp500(),
                refresh=False, filename="SP500EMA50-200Slippage", slippage=1,
@@ -715,15 +747,18 @@ if __name__ == '__main__':
                signal_func=sma, signal_func_kwargs={"period": [50, 200]})
     Simulation(symbols=sp.get_sp500(),
                refresh=False, filename="SP500MACD",
-               signal_func=macd, signal_func_kwargs={"period": ema.default_periods})
+               signal_func=macd, signal_func_kwargs={"period": macd.default_periods})
     Simulation(symbols=sp.get_sp500(),
                refresh=False, filename="SP500MACDSoftSignals", soft_signals=True,
-               signal_func=macd, signal_func_kwargs={"period": ema.default_periods})
+               signal_func=macd, signal_func_kwargs={"period": macd.default_periods})
     Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500RSI14",
-               signal_func=rsi, signal_func_kwargs={"period": rsi.default_period})
+               refresh=False, filename="SP500RSI14-30-70",
+               signal_func=rsi, signal_func_kwargs={"period": rsi.default_period, "thresholds": rsi.default_thresholds})
     Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500BB",
+               refresh=False, filename="SP500RSI14-20-80",
+               signal_func=rsi, signal_func_kwargs={"period": rsi.default_period, "thresholds": {"Low": 20, "High": 80}})
+    Simulation(symbols=sp.get_sp500(),
+               refresh=False, filename="SP500BB20-2",
                signal_func=bb, signal_func_kwargs={"period": bb.default_period, "std": bb.default_std})
 
     # On non-SP500 symbols
@@ -733,7 +768,7 @@ if __name__ == '__main__':
     Simulation(symbols=["MSFT", "GOOG", "FB", "AAPL", "AMZN"],
                refresh=False, filename="BigNEMA50-200",
                signal_func=ema, signal_func_kwargs={"period": [50, 200]})
-    
+
     # random symbols
     for func in [ema, sma, macd, rsi, bb]:
         Simulation(symbols=pd.read_csv(utils.get_file_path(config.symbols_data_path, "RandomSymbolList1.csv"))["Symbol"].tolist(),
@@ -747,14 +782,87 @@ if __name__ == '__main__':
                    signal_func=func)
 
     # random walks
+
+    #for func in [ema, sma, macd, rsi, bb]:
+    #    Simulation(symbols=["RandomWalk1", "RandomWalk2", "RandomWalk3", "RandomWalk4", "RandomWalk5"],
+    #               refresh=False, filename="RandomWalk" + func.get_signal_name(),
+    #               signal_func=func)
+
+    random_walks = list(("RandomWalk" + str(n) for n in range(0, 100)))
     for func in [ema, sma, macd, rsi, bb]:
-        Simulation(symbols=["RandomWalk1", "RandomWalk2", "RandomWalk3", "RandomWalk4", "RandomWalk5"],
-                   refresh=False, filename="RandomWalk" + func.get_signal_name(),
+        Simulation(symbols=random_walks,
+                   refresh=False, filename="RandomWalk100" + func.get_signal_name(),
                    signal_func=func)
+    '''
+
+    '''
+    # Vol forecasting
+    Simulation(symbols=["UVXY", "SVXY"], benchmark=["SPY", "RSP", "UVXY", "SVXY"],
+               refresh=False, iterate_over_symbols=True, filename="VolForecast",
+               start_date=datetime.date(2018, 3, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["UVXY", "SVXY"], "period": [2, 5]})
+    Simulation(symbols=["UVXY"], benchmark=["SPY", "RSP", "UVXY"],
+               refresh=False, iterate_over_symbols=True, filename="VolForecastLongVixOnly",
+               start_date=datetime.date(2018, 3, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["UVXY", "SVXY"], "period": [2, 5]})
+    Simulation(symbols=["SVXY"], benchmark=["SPY", "RSP", "SVXY"],
+               refresh=False, iterate_over_symbols=True, filename="VolForecastShortVixOnly",
+               start_date=datetime.date(2018, 3, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["UVXY", "SVXY"], "period": [2, 5]})
+    Simulation(symbols=["UVXY", "SVXY"], benchmark=["SPY", "RSP", "UVXY", "SVXY"],
+               refresh=False, iterate_over_symbols=True, filename="VolForecastBeforeLeverageChange",
+               start_date=datetime.date(2011, 11, 1), end_date=datetime.date(2018, 3, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["UVXY", "SVXY"], "period": [2, 5]})
+    # requires changing long_vix_symbol and short_vix_symbol to UPRO and SPXU
+    Simulation(symbols=["SPXU", "UPRO"], benchmark=["SPY", "RSP", "SPXU", "UPRO"],
+               refresh=False, iterate_over_symbols=True, filename="VolForecastLeveragedSPY",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["SPXU", "UPRO"], "period": [2, 5]})
+    Simulation(symbols=["SPXU"], benchmark=["SPY", "RSP", "SPXU"],
+               refresh=False, iterate_over_symbols=True, filename="VolForecastLeveragedSPYShortSPYOnly",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["SPXU", "UPRO"], "period": [2, 5]})
+    Simulation(symbols=["UPRO"], benchmark=["SPY", "RSP", "UPRO"],
+               refresh=False, iterate_over_symbols=True, filename="VolForecastLeveragedSPYLongSPYOnly",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["SPXU", "UPRO"], "period": [2, 5]})
+
+    # Vol contango
+    Simulation(symbols=["UVXY", "SVXY"], benchmark=["SPY", "RSP", "UVXY", "SVXY"],
+               refresh=False, iterate_over_symbols=True, filename="VolContango",
+               start_date=datetime.date(2018, 3, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["UVXY", "SVXY"], "period": 60})
+    Simulation(symbols=["UVXY"], benchmark=["SPY", "RSP", "UVXY"],
+               refresh=False, iterate_over_symbols=True, filename="VolContangoLongVixOnly",
+               start_date=datetime.date(2018, 3, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["UVXY", "SVXY"], "period": 60})
+    Simulation(symbols=["SVXY"], benchmark=["SPY", "RSP", "SVXY"],
+               refresh=False, iterate_over_symbols=True, filename="VolContangoShortVixOnly",
+               start_date=datetime.date(2018, 3, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["UVXY", "SVXY"], "period": 60})
+    Simulation(symbols=["UVXY", "SVXY"], benchmark=["SPY", "RSP", "UVXY", "SVXY"],
+               refresh=False, iterate_over_symbols=True, filename="VolContangoBeforeLeverageChange",
+               start_date=datetime.date(2011, 11, 1), end_date=datetime.date(2018, 3, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["UVXY", "SVXY"], "period": 60})
+    # requires changing long_vix_symbol and short_vix_symbol to UPRO and SPXU
+    Simulation(symbols=["SPXU", "UPRO"], benchmark=["SPY", "RSP", "SPXU", "UPRO"],
+               refresh=False, iterate_over_symbols=True, filename="VolContangoLeveragedSPY",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["SPXU", "UPRO"], "period": 60})
+    Simulation(symbols=["SPXU"], benchmark=["SPY", "RSP", "SPXU"],
+               refresh=False, iterate_over_symbols=True, filename="VolContangoLeveragedSPYShortSPYOnly",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["SPXU", "UPRO"], "period": 60})
+    Simulation(symbols=["UPRO"], benchmark=["SPY", "RSP", "UPRO"],
+               refresh=False, iterate_over_symbols=True, filename="VolContangoLeveragedSPYLongSPYOnly",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["SPXU", "UPRO"], "period": 60})
+    '''
 
     time = timer() - start_time
     hours, rem = divmod(time, 3600)
     minutes, seconds = divmod(rem, 60)
     print("Total Time: {:0>2}:{:0>2}:{:05.2f}".format(int(hours), int(minutes), seconds))
+
 
 # Threading causes issues where, if reading shortly after file is generated, pandas will read an empty file and throw pandas.errors.EmptyDataError: No columns to parse from file

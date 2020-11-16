@@ -10,7 +10,7 @@ import tautils as ta
 from pandas_datareader._utils import RemoteDataError
 
 table_filename = "BB.csv"
-graph_filename = "BB.png"
+graph_filename = ".png"
 
 default_period = 20
 default_std = 2
@@ -93,7 +93,7 @@ def plot_bb(symbol, period=default_period, std=default_std, refresh=False, start
     utils.prettify_ax(ax, title=symbol + "BB", start_date=start_date, end_date=end_date)
 
     utils.prettify_fig(fig)
-    fig.savefig(utils.get_file_path(config.ta_graphs_path, graph_filename, symbol=symbol))
+    fig.savefig(utils.get_file_path(config.ta_graphs_path, get_signal_name(period, std) + graph_filename, symbol=symbol))
     utils.debug(fig)
     return fig, ax
 
@@ -181,7 +181,7 @@ def plot_signals(symbol, period=default_period, std=default_std, refresh=False, 
     utils.prettify_ax(ax, title=symbol + signal_column_name, start_date=start_date, end_date=end_date)
 
     utils.prettify_fig(fig)
-    fig.savefig(utils.get_file_path(config.ta_graphs_path, graph_filename, symbol=symbol))
+    fig.savefig(utils.get_file_path(config.ta_graphs_path, get_signal_name(period, std) + graph_filename, symbol=symbol))
     utils.debug(fig)
 
     return fig, ax

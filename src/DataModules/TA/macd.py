@@ -8,7 +8,7 @@ import utils
 import tautils as ta
 
 table_filename = "MACD.csv"
-graph_filename = "MACD.png"
+graph_filename = ".png"
 
 default_periods = [9, 12, 26]
 
@@ -112,7 +112,7 @@ def plot_macd(symbol, period=default_periods, refresh=False, start_date=config.s
     utils.prettify_ax(ax[1], title=symbol + "MACD", center=True, start_date=start_date, end_date=end_date)
 
     utils.prettify_fig(fig)
-    fig.savefig(utils.get_file_path(config.ta_graphs_path, "-".join(str(p) for p in period) + graph_filename, symbol=symbol))
+    fig.savefig(utils.get_file_path(config.ta_graphs_path, get_signal_name(period) + graph_filename, symbol=symbol))
     utils.debug(fig)
     return fig, ax
 
@@ -208,10 +208,11 @@ def plot_signals(symbol, period=default_periods, refresh=False, start_date=confi
     utils.prettify_ax(ax[1], title=symbol + signal_column_name, center=True, start_date=start_date, end_date=end_date)
 
     utils.prettify_fig(fig)
-    fig.savefig(utils.get_file_path(config.ta_graphs_path, "-".join(str(p) for p in period) + graph_filename, symbol=symbol))
+    fig.savefig(utils.get_file_path(config.ta_graphs_path, get_signal_name(period) + graph_filename, symbol=symbol))
     utils.debug(fig)
 
     return fig, ax
+
 
 def get_signal_name(period=default_periods):
     return "MACD" + "Signal" + "-".join(str(p) for p in period)

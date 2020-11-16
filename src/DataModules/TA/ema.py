@@ -10,9 +10,9 @@ import tautils as ta
 from pandas_datareader._utils import RemoteDataError
 
 table_filename = "EMA.csv"
-graph_filename = "EMA.png"
+graph_filename = ".png"
 
-default_periods = [20, 50, 200]
+default_periods = [50, 200]
 
 
 # TODO: 200 day ema is slightly off. 50 and 20 day emas have no issue. Diverence seems to start around 70
@@ -89,13 +89,13 @@ def plot_ema(symbol, period=default_periods, refresh=False, start_date=config.st
     utils.prettify_ax(ax, title=symbol + "EMA" + "-".join(str(p) for p in period), start_date=start_date, end_date=end_date)
 
     utils.prettify_fig(fig)
-    fig.savefig(utils.get_file_path(config.ta_graphs_path, "-".join(str(p) for p in period) + graph_filename, symbol=symbol))
+    fig.savefig(utils.get_file_path(config.ta_graphs_path, get_signal_name(period) + graph_filename, symbol=symbol))
     utils.debug(fig)
     return fig, ax
 
 
 def generate_signals(symbol, period=default_periods, refresh=False, start_date=config.start_date, end_date=config.end_date):
-    """Calculates the exponential moving agerage buy/sell signals for each period for the given symbol, saves this data in a .csv file, and plots this data. Only uses the first and last periods
+    """Calculates the exponential moving agerage buy/sell signals for each period for the given symbol, saves this data in a .csv file, and plots this data.
     The EMA is a lagging trend indicator.
 
     Parameters:
@@ -111,10 +111,8 @@ def generate_signals(symbol, period=default_periods, refresh=False, start_date=c
             A dataframe containing the exponential moving agerage signals for the given symbol
     """
 
-    if len(period) < 2:
-        raise ValueError("Requires at least two periods")
-    if len(period) > 2:
-        period = period[:2]
+    if len(period) != 2:
+        raise ValueError("Requires at two periods")
     period.sort()
 
     # Why did I do this differently in plot?
@@ -142,7 +140,7 @@ def generate_signals(symbol, period=default_periods, refresh=False, start_date=c
 
 
 def plot_signals(symbol, period=default_periods, refresh=False, start_date=config.start_date, end_date=config.end_date):
-    """Plots the exponential moving agerage buy/sell signals for each period for the given symbol, saves this data in a .csv file, and plots this data. Only uses the first and last periods
+    """Plots the exponential moving agerage buy/sell signals for each period for the given symbol, saves this data in a .csv file, and plots this data.
     The EMA is a lagging trend indicator.
 
     Parameters:
@@ -158,10 +156,8 @@ def plot_signals(symbol, period=default_periods, refresh=False, start_date=confi
             A figure and axes containing the exponential moving agerage signals for the given symbol
     """
 
-    if len(period) < 2:
-        raise ValueError("Requires at least two periods")
-    if len(period) > 2:
-        period = period[:2]
+    if len(period) != 2:
+        raise ValueError("Requires at two periods")
     period.sort()
 
     generate_signals(symbol, period=period, refresh=refresh, start_date=start_date, end_date=end_date)
@@ -191,11 +187,11 @@ def plot_signals(symbol, period=default_periods, refresh=False, start_date=confi
     utils.prettify_ax(ax, title=symbol + signal_column_name, start_date=start_date, end_date=end_date)
 
     utils.prettify_fig(fig)
-    fig.savefig(utils.get_file_path(config.ta_graphs_path, "-".join(str(p) for p in period) + graph_filename, symbol=symbol))
+    fig.savefig(utils.get_file_path(config.ta_graphs_path, get_signal_name(period) + graph_filename, symbol=symbol))
     utils.debug(fig)
 
     return fig, ax
 
 
 def get_signal_name(period=default_periods):
-    return "EMA" + "Signal" + str(period[0]) + "-" + str(period[1])
+    return "EMA" + "Signal" + "-".join(str(p) for p in period)
