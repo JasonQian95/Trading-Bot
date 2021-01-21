@@ -558,6 +558,18 @@ class Simulation:
                     self.get_dividends(symbol, date)
                     if not self.is_date_in_bounds(symbol, date):
                         self.sell(symbol, date, sell_size=0)
+                # Do all selling first
+                for symbol in self.symbols:  # might need a .copy() here but probably not
+                    signal = self.read_signal(symbol, date)
+                    if not self.is_date_in_bounds(symbol, date) and signal != ta.default_signal:
+                        # This should never happen
+                        print("Read a signal when no price exists for this date: {} {} {} {}".format(symbol, date, self.signal_name, signal))
+                        raise IndexError
+                    if signal == ta.sell_signal:
+                        self.sell(symbol, date, sell_size=0)
+                    if signal == ta.soft_sell_signal and self.soft_signals:
+                        self.sell(symbol, date, sell_size=0)
+                # Then all buying
                 for symbol in self.symbols:  # might need a .copy() here but probably not
                     signal = self.read_signal(symbol, date)
                     if not self.is_date_in_bounds(symbol, date) and signal != ta.default_signal:
@@ -566,12 +578,8 @@ class Simulation:
                         raise IndexError
                     if signal == ta.buy_signal:
                         self.buy(symbol, date, self.purchase_size)
-                    if signal == ta.sell_signal:
-                        self.sell(symbol, date, sell_size=0)
                     if signal == ta.soft_buy_signal and self.soft_signals:
                         self.buy(symbol, date, self.purchase_size)
-                    if signal == ta.soft_sell_signal and self.soft_signals:
-                        self.sell(symbol, date, sell_size=0)
                 self.log.loc[date][cash_column_name, portfolio_column_name, portfolio_value_column_name, total_commission_column_name, total_dividend_column_name] \
                     = [self.cash, self.format_portfolio(date), self.portfolio_value(date), self.total_commissions, self.total_dividends]
                 # Why does this line require str(self.portfolio)?
@@ -684,7 +692,11 @@ class Simulation:
         betas = {}
         a = self.log[portfolio_value_column_name].pct_change()[1:]
         for bench in self.benchmark:
-            df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=bench), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date]
+            if not utils.refresh(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=bench), refresh=self.refresh):
+                df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=bench), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date]
+            else:
+                prices.download_data_from_yahoo(bench, start_date=self.start_date, end_date=self.end_date)
+                df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=bench), index_col="Date", parse_dates=["Date"])[self.start_date:self.end_date]
             b = df["Close"].add(df["Dividends"].cumsum()).pct_change()[1:]
 
             beta = np.cov(a, b)[0][1] / np.var(b)
@@ -719,54 +731,54 @@ if __name__ == '__main__':
     '''
     # EMA sims
     Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500EMA20-50",
+               refresh=False, filename="SP500" + ema.get_signal_name(period=[20, 50]),
                signal_func=ema, signal_func_kwargs={"period": [20, 50]})
     Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500EMA20-200",
+               refresh=False, filename="SP500" + ema.get_signal_name(period=[20, 200]),
                signal_func=ema, signal_func_kwargs={"period": [20, 200]})
     # This is the 'benchmark'/'default'
     Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500EMA50-200",
+               refresh=False, filename="SP500" + ema.get_signal_name(period=[50, 200]),
                signal_func=ema, signal_func_kwargs={"period": [50, 200]})
     Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500EMA50-200SoftSignals", soft_signals=True,
+               refresh=False, filename="SP500" + ema.get_signal_name(period=[50, 200]) + "SoftSignals", soft_signals=True,
                signal_func=ema, signal_func_kwargs={"period": [50, 200]})
     Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500EMA50-200Slippage", slippage=1,
+               refresh=False, filename="SP500" + ema.get_signal_name(period=[50, 200]) + "Slippage", slippage=1,
                signal_func=ema, signal_func_kwargs={"period": [50, 200]})
 
     # Other TA
     Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500SMA20-50",
+               refresh=False, filename="SP500" + sma.get_signal_name(period=[20, 50]),
                signal_func=sma, signal_func_kwargs={"period": [20, 50]})
     Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500SMA50-200",
+               refresh=False, filename="SP500" + sma.get_signal_name(period=[50, 200]),
                signal_func=sma, signal_func_kwargs={"period": [50, 200]})
     Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500SMA50-200SoftSignals", soft_signals=True,
+               refresh=False, filename="SP500" + sma.get_signal_name(period=[50, 200]) + "SoftSignals", soft_signals=True,
                signal_func=sma, signal_func_kwargs={"period": [50, 200]})
     Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500MACD",
+               refresh=False, filename="SP500MACD" + macd.get_signal_name(period=macd.default_periods),
                signal_func=macd, signal_func_kwargs={"period": macd.default_periods})
     Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500MACDSoftSignals", soft_signals=True,
+               refresh=False, filename="SP500" + macd.get_signal_name(period=macd.default_periods) + "SoftSignals", soft_signals=True,
                signal_func=macd, signal_func_kwargs={"period": macd.default_periods})
     Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500RSI14-30-70",
+               refresh=False, filename="SP500" + rsi.get_signal_name(period=rsi.default_period, thresholds=rsi.default_thresholds),
                signal_func=rsi, signal_func_kwargs={"period": rsi.default_period, "thresholds": rsi.default_thresholds})
     Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500RSI14-20-80",
+               refresh=False, filename="SP500" + rsi.get_signal_name(period=rsi.default_period, thresholds={"Low": 20, "High": 80}),
                signal_func=rsi, signal_func_kwargs={"period": rsi.default_period, "thresholds": {"Low": 20, "High": 80}})
     Simulation(symbols=sp.get_sp500(),
-               refresh=False, filename="SP500BB20-2",
+               refresh=False, filename="SP500" + bb.get_signal_name(period=bb.default_period, std=bb.default_std),
                signal_func=bb, signal_func_kwargs={"period": bb.default_period, "std": bb.default_std})
 
     # On non-SP500 symbols
     Simulation(symbols=["SPY"],
-               refresh=False, filename="SPYEMA50-200",
+               refresh=False, filename="SPY" + ema.get_signal_name(period=[50, 200]),
                signal_func=ema, signal_func_kwargs={"period": [50, 200]})
     Simulation(symbols=["MSFT", "GOOG", "FB", "AAPL", "AMZN"],
-               refresh=False, filename="BigNEMA50-200",
+               refresh=False, filename="BigN" + ema.get_signal_name(period=[50, 200]),
                signal_func=ema, signal_func_kwargs={"period": [50, 200]})
 
     # random symbols
@@ -797,72 +809,167 @@ if __name__ == '__main__':
 
     '''
     # Vol forecasting
-    Simulation(symbols=["UVXY", "SVXY"], benchmark=["SPY", "RSP", "UVXY", "SVXY"],
-               refresh=False, iterate_over_symbols=True, filename="VolForecast",
+    Simulation(symbols=["SVXY", "UVXY"], benchmark=["SPY", "RSP", "SVXY", "UVXY"],
+               refresh=False, iterate_over_symbols=True, filename=volforecast.get_signal_name() + "Vix",
                start_date=datetime.date(2018, 3, 1), max_portfolio_size=2, slippage=1,
-               signal_func=volforecast, signal_func_kwargs={"symbol": ["UVXY", "SVXY"], "period": [2, 5]})
-    Simulation(symbols=["UVXY"], benchmark=["SPY", "RSP", "UVXY"],
-               refresh=False, iterate_over_symbols=True, filename="VolForecastLongVixOnly",
-               start_date=datetime.date(2018, 3, 1), max_portfolio_size=2, slippage=1,
-               signal_func=volforecast, signal_func_kwargs={"symbol": ["UVXY", "SVXY"], "period": [2, 5]})
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["SVXY", "UVXY"], "period": [2, 5]})
     Simulation(symbols=["SVXY"], benchmark=["SPY", "RSP", "SVXY"],
-               refresh=False, iterate_over_symbols=True, filename="VolForecastShortVixOnly",
+               refresh=False, iterate_over_symbols=True, filename=volforecast.get_signal_name() + "VixShortVixOnly",
                start_date=datetime.date(2018, 3, 1), max_portfolio_size=2, slippage=1,
-               signal_func=volforecast, signal_func_kwargs={"symbol": ["UVXY", "SVXY"], "period": [2, 5]})
-    Simulation(symbols=["UVXY", "SVXY"], benchmark=["SPY", "RSP", "UVXY", "SVXY"],
-               refresh=False, iterate_over_symbols=True, filename="VolForecastBeforeLeverageChange",
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["SVXY", "UVXY"], "period": [2, 5]})
+    Simulation(symbols=["UVXY"], benchmark=["SPY", "RSP", "UVXY"],
+               refresh=False, iterate_over_symbols=True, filename=volforecast.get_signal_name() + "VixLongVixOnly",
+               start_date=datetime.date(2018, 3, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["SVXY", "UVXY"], "period": [2, 5]})
+    Simulation(symbols=["SVXY", "UVXY"], benchmark=["SPY", "RSP", "SVXY", "UVXY"],
+               refresh=False, iterate_over_symbols=True, filename=volforecast.get_signal_name() + "VixBeforeLeverageChange",
                start_date=datetime.date(2011, 11, 1), end_date=datetime.date(2018, 3, 1), max_portfolio_size=2, slippage=1,
-               signal_func=volforecast, signal_func_kwargs={"symbol": ["UVXY", "SVXY"], "period": [2, 5]})
-    # requires changing long_vix_symbol and short_vix_symbol to UPRO and SPXU
-    Simulation(symbols=["SPXU", "UPRO"], benchmark=["SPY", "RSP", "SPXU", "UPRO"],
-               refresh=False, iterate_over_symbols=True, filename="VolForecastLeveragedSPY",
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["SVXY", "UVXY"], "period": [2, 5]})
+    Simulation(symbols=["UPRO", "SPXU"], benchmark=["SPY", "RSP", "UPRO", "SPXU"],
+               refresh=False, iterate_over_symbols=True, filename=volforecast.get_signal_name() + "LeveragedSPY",
                start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
-               signal_func=volforecast, signal_func_kwargs={"symbol": ["SPXU", "UPRO"], "period": [2, 5]})
-    Simulation(symbols=["SPXU"], benchmark=["SPY", "RSP", "SPXU"],
-               refresh=False, iterate_over_symbols=True, filename="VolForecastLeveragedSPYShortSPYOnly",
-               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
-               signal_func=volforecast, signal_func_kwargs={"symbol": ["SPXU", "UPRO"], "period": [2, 5]})
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["UPRO", "SPXU"], "period": [2, 5]})
     Simulation(symbols=["UPRO"], benchmark=["SPY", "RSP", "UPRO"],
-               refresh=False, iterate_over_symbols=True, filename="VolForecastLeveragedSPYLongSPYOnly",
+               refresh=False, iterate_over_symbols=True, filename=volforecast.get_signal_name() + "LeveragedSPYLongSPYOnly",
                start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
-               signal_func=volforecast, signal_func_kwargs={"symbol": ["SPXU", "UPRO"], "period": [2, 5]})
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["UPRO", "SPXU"], "period": [2, 5]})
+    Simulation(symbols=["SPXU"], benchmark=["SPY", "RSP", "SPXU"],
+               refresh=False, iterate_over_symbols=True, filename=volforecast.get_signal_name() + "LeveragedSPYShortSPYOnly",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["UPRO", "SPXU"], "period": [2, 5]})
 
     # Vol contango
-    Simulation(symbols=["UVXY", "SVXY"], benchmark=["SPY", "RSP", "UVXY", "SVXY"],
-               refresh=False, iterate_over_symbols=True, filename="VolContango",
+    Simulation(symbols=["SVXY", "UVXY"], benchmark=["SPY", "RSP", "SVXY", "UVXY"],
+               refresh=False, iterate_over_symbols=True, filename=volcontango.get_signal_name() + "Vix",
                start_date=datetime.date(2018, 3, 1), max_portfolio_size=2, slippage=1,
-               signal_func=volcontango, signal_func_kwargs={"symbol": ["UVXY", "SVXY"], "period": 60})
-    Simulation(symbols=["UVXY"], benchmark=["SPY", "RSP", "UVXY"],
-               refresh=False, iterate_over_symbols=True, filename="VolContangoLongVixOnly",
-               start_date=datetime.date(2018, 3, 1), max_portfolio_size=2, slippage=1,
-               signal_func=volcontango, signal_func_kwargs={"symbol": ["UVXY", "SVXY"], "period": 60})
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["SVXY", "UVXY"], "period": 60})
     Simulation(symbols=["SVXY"], benchmark=["SPY", "RSP", "SVXY"],
-               refresh=False, iterate_over_symbols=True, filename="VolContangoShortVixOnly",
+               refresh=False, iterate_over_symbols=True, filename=volcontango.get_signal_name() + "VixShortVixOnly",
                start_date=datetime.date(2018, 3, 1), max_portfolio_size=2, slippage=1,
-               signal_func=volcontango, signal_func_kwargs={"symbol": ["UVXY", "SVXY"], "period": 60})
-    Simulation(symbols=["UVXY", "SVXY"], benchmark=["SPY", "RSP", "UVXY", "SVXY"],
-               refresh=False, iterate_over_symbols=True, filename="VolContangoBeforeLeverageChange",
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["SVXY", "UVXY"], "period": 60})
+    Simulation(symbols=["UVXY"], benchmark=["SPY", "RSP", "UVXY"],
+               refresh=False, iterate_over_symbols=True, filename=volcontango.get_signal_name() + "VixLongVixOnly",
+               start_date=datetime.date(2018, 3, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["SVXY", "UVXY"], "period": 60})
+    Simulation(symbols=["SVXY", "UVXY"], benchmark=["SPY", "RSP", "SVXY", "UVXY"],
+               refresh=False, iterate_over_symbols=True, filename=volcontango.get_signal_name() + "VixBeforeLeverageChange",
                start_date=datetime.date(2011, 11, 1), end_date=datetime.date(2018, 3, 1), max_portfolio_size=2, slippage=1,
-               signal_func=volcontango, signal_func_kwargs={"symbol": ["UVXY", "SVXY"], "period": 60})
-    # requires changing long_vix_symbol and short_vix_symbol to UPRO and SPXU
-    Simulation(symbols=["SPXU", "UPRO"], benchmark=["SPY", "RSP", "SPXU", "UPRO"],
-               refresh=False, iterate_over_symbols=True, filename="VolContangoLeveragedSPY",
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["SVXY", "UVXY"], "period": 60})
+    Simulation(symbols=["UPRO", "SPXU"], benchmark=["SPY", "RSP", "UPRO", "SPXU"],
+               refresh=False, iterate_over_symbols=True, filename=volcontango.get_signal_name() + "LeveragedSPY",
                start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
-               signal_func=volcontango, signal_func_kwargs={"symbol": ["SPXU", "UPRO"], "period": 60})
-    Simulation(symbols=["SPXU"], benchmark=["SPY", "RSP", "SPXU"],
-               refresh=False, iterate_over_symbols=True, filename="VolContangoLeveragedSPYShortSPYOnly",
-               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
-               signal_func=volcontango, signal_func_kwargs={"symbol": ["SPXU", "UPRO"], "period": 60})
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["UPRO", "SPXU"], "period": 60})
     Simulation(symbols=["UPRO"], benchmark=["SPY", "RSP", "UPRO"],
-               refresh=False, iterate_over_symbols=True, filename="VolContangoLeveragedSPYLongSPYOnly",
+               refresh=False, iterate_over_symbols=True, filename=volcontango.get_signal_name() + "LeveragedSPYLongSPYOnly",
                start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
-               signal_func=volcontango, signal_func_kwargs={"symbol": ["SPXU", "UPRO"], "period": 60})
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["UPRO", "SPXU"], "period": 60})
+    Simulation(symbols=["SPXU"], benchmark=["SPY", "RSP", "SPXU"],
+               refresh=False, iterate_over_symbols=True, filename=volcontango.get_signal_name() + "LeveragedSPYShortSPYOnly",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["UPRO", "SPXU"], "period": 60})
     '''
+    '''
+    # shorter term vix
+    volforecast.implied_vol_symbol = "^VIX"
+    Simulation(symbols=["UPRO", "SPXU"], benchmark=["SPY", "RSP", "UPRO", "SPXU"],
+               refresh=False, iterate_over_symbols=True, filename=volforecast.get_signal_name() + "LeveragedSPY",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["UPRO", "SPXU"], "period": [2, 5]})
+    Simulation(symbols=["UPRO"], benchmark=["SPY", "RSP", "UPRO"],
+               refresh=False, iterate_over_symbols=True, filename=volforecast.get_signal_name() + "LeveragedSPYLongSPYOnly",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["UPRO", "SPXU"], "period": [2, 5]})
+    Simulation(symbols=["SPXU"], benchmark=["SPY", "RSP", "SPXU"],
+               refresh=False, iterate_over_symbols=True, filename=volforecast.get_signal_name() + "LeveragedSPYShortSPYOnly",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["UPRO", "SPXU"], "period": [2, 5]})
+
+
+    volcontango.short_term_vol_symbol = "^VIX"
+    volcontango.long_term_vol_symbol = "^VIX3M"
+    Simulation(symbols=["UPRO", "SPXU"], benchmark=["SPY", "RSP", "UPRO", "SPXU"],
+               refresh=False, iterate_over_symbols=True, filename=volcontango.get_signal_name() + "LeveragedSPY",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["UPRO", "SPXU"], "period": 60})
+    Simulation(symbols=["UPRO"], benchmark=["SPY", "RSP", "UPRO"],
+               refresh=False, iterate_over_symbols=True, filename=volcontango.get_signal_name() + "LeveragedSPYLongSPYOnly",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["UPRO", "SPXU"], "period": 60})
+    Simulation(symbols=["SPXU"], benchmark=["SPY", "RSP", "SPXU"],
+               refresh=False, iterate_over_symbols=True, filename=volcontango.get_signal_name() + "LeveragedSPYShortSPYOnly",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["UPRO", "SPXU"], "period": 60})
+    '''
+    '''
+    # UIS strats (UPRO + TMF)
+    volforecast.implied_vol_symbol = "^VIX"
+    Simulation(symbols=["UPRO", "TMF"], benchmark=["SPY", "RSP", "UPRO", "TMF"],
+               refresh=False, iterate_over_symbols=True, filename=volforecast.get_signal_name() + "LeveragedUIS",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["UPRO", "TMF"], "period": [2, 5]})
+    Simulation(symbols=["UPRO"], benchmark=["SPY", "RSP", "UPRO"],
+               refresh=False, iterate_over_symbols=True, filename=volforecast.get_signal_name() + "LeveragedUISLongSPYOnly",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["UPRO", "TMF"], "period": [2, 5]})
+    Simulation(symbols=["TMF"], benchmark=["SPY", "RSP", "TMF"],
+               refresh=False, iterate_over_symbols=True, filename=volforecast.get_signal_name() + "LeveragedUISShortSPYOnly",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["UPRO", "TMF"], "period": [2, 5]})
+
+    volcontango.short_term_vol_symbol = "^VIX"
+    volcontango.long_term_vol_symbol = "^VIX3M"
+    Simulation(symbols=["UPRO", "TMF"], benchmark=["SPY", "RSP", "UPRO", "TMF"],
+               refresh=False, iterate_over_symbols=True, filename=volcontango.get_signal_name() + "LeveragedUIS",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["UPRO", "TMF"], "period": 60})
+    Simulation(symbols=["UPRO"], benchmark=["SPY", "RSP", "UPRO"],
+               refresh=False, iterate_over_symbols=True, filename=volcontango.get_signal_name() + "LeveragedUISLongSPYOnly",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["UPRO", "TMF"], "period": 60})
+    Simulation(symbols=["TMF"], benchmark=["SPY", "RSP", "TMF"],
+               refresh=False, iterate_over_symbols=True, filename=volcontango.get_signal_name() + "LeveragedUISShortSPYOnly",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["UPRO", "TMF"], "period": 60})
+    '''
+    '''
+    # even shorter vol
+    volforecast.implied_vol_symbol = "^VIX9D"
+    Simulation(symbols=["UPRO", "SPXU"], benchmark=["SPY", "RSP", "UPRO", "SPXU"],
+               refresh=False, iterate_over_symbols=True, filename=volforecast.get_signal_name() + "LeveragedSPY",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["UPRO", "SPXU"], "period": [2, 5]})
+    Simulation(symbols=["UPRO"], benchmark=["SPY", "RSP", "UPRO"],
+               refresh=False, iterate_over_symbols=True, filename=volforecast.get_signal_name() + "LeveragedSPYLongSPYOnly",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["UPRO", "SPXU"], "period": [2, 5]})
+    Simulation(symbols=["SPXU"], benchmark=["SPY", "RSP", "SPXU"],
+               refresh=False, iterate_over_symbols=True, filename=volforecast.get_signal_name() + "LeveragedSPYShortSPYOnly",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volforecast, signal_func_kwargs={"symbol": ["UPRO", "SPXU"], "period": [2, 5]})
+
+
+    volcontango.short_term_vol_symbol = "^VIX9D"
+    volcontango.long_term_vol_symbol = "^VIX"
+    Simulation(symbols=["UPRO", "SPXU"], benchmark=["SPY", "RSP", "UPRO", "SPXU"],
+               refresh=False, iterate_over_symbols=True, filename=volcontango.get_signal_name() + "LeveragedSPY",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["UPRO", "SPXU"], "period": 60})
+    Simulation(symbols=["UPRO"], benchmark=["SPY", "RSP", "UPRO"],
+               refresh=False, iterate_over_symbols=True, filename=volcontango.get_signal_name() + "LeveragedSPYLongSPYOnly",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["UPRO", "SPXU"], "period": 60})
+    Simulation(symbols=["SPXU"], benchmark=["SPY", "RSP", "SPXU"],
+               refresh=False, iterate_over_symbols=True, filename=volcontango.get_signal_name() + "LeveragedSPYShortSPYOnly",
+               start_date=datetime.date(2011, 11, 1), max_portfolio_size=2, slippage=1,
+               signal_func=volcontango, signal_func_kwargs={"symbol": ["UPRO", "SPXU"], "period": 60})
+    '''
+
+    # If there are issues with the length of dataframes, turn refresh on, especially when the total universe is small
 
     time = timer() - start_time
     hours, rem = divmod(time, 3600)
     minutes, seconds = divmod(rem, 60)
     print("Total Time: {:0>2}:{:0>2}:{:05.2f}".format(int(hours), int(minutes), seconds))
 
-
-# Threading causes issues where, if reading shortly after file is generated, pandas will read an empty file and throw pandas.errors.EmptyDataError: No columns to parse from file
+# Threading can't be supported due to the following issue:
+# If reading shortly after file is generated, pandas will read an empty file and throw pandas.errors.EmptyDataError: No columns to parse from file

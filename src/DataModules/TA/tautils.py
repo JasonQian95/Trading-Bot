@@ -33,6 +33,7 @@ signal_colors = {
     soft_buy_signal: "yellow",
     soft_sell_signal: "yellow"
 }
+# could also use vline but they're too thin
 signal_markers = {
     buy_signal: "^",
     sell_signal: "v",

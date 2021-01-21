@@ -165,8 +165,8 @@ def prettify_ax(ax, title="", center=False, percentage=False, start_date=config.
     if not center and ax.get_ylim()[0] < 0:
         ax.set_ylim(ymin=0)
     if center:
-        min_y = ax.get_ylim()[0].astype(float)
-        max_y = ax.get_ylim()[1].astype(float)
+        min_y = ax.get_ylim()[0].astype(float)  # should this be int?
+        max_y = ax.get_ylim()[1].astype(float)  # should this be int?
         if abs(min_y) != abs(max_y):
             ax.set_ylim(ymin=-max(abs(min_y), abs(max_y)), ymax=max(abs(min_y), abs(max_y)))
         ax.plot(range(min_x, max_x), [0] * len(range(min_x, max_x)), "-", linewidth=0.5, color="black")
@@ -176,6 +176,7 @@ def prettify_ax(ax, title="", center=False, percentage=False, start_date=config.
         # ax.set_yticks([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
 
     # TODO: do this for the dates too. Have to get locators, since there are too many ticks
+    # Is this code below the same as this?: ax.xaxis.grid(color='gray', linestyle='dashed')
     # for y in range(ax.get_ylim()[0], ax.get_ylim()[1], 10):
     for i, y in enumerate(ax.get_yticks().astype(float)[1:-1]):
         ax.plot(range(min_x, max_x), [y] * len(range(min_x, max_x)), "--", linewidth=0.5, color="black", alpha=config.alpha)

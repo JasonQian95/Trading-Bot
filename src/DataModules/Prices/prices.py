@@ -49,6 +49,12 @@ def download_data_from_yahoo(symbol, adjust=True, backfill=False, start_date=con
             A dataframe containing high, low, open, close, volume, and adjusted close by date for the given symbol
     """
 
+    # Get some extra data to minimize refreshing
+    if start_date > config.start_date:
+        start_date = config.start_date
+    if end_date < config.end_date:
+        end_date = config.end_date
+
     with utils.HiddenPrints():
         df = yf.Ticker(symbol).history(auto_adjust=False, start=start_date, end=end_date)
 

@@ -19,15 +19,17 @@ trash_data_files = True
 index = "SPY"
 sp500 = "^GSPC"
 vix = "^VIX"
+vol_dict = {"^VIX9D": "9D", "^VIX": "1M", "^VIX3M": "3M", "^VIX6M": "6M", "^VIX1Y": "1Y"}
 test_symbol = "AAPL"
-broken_symbols = ["HWM", "TT", "VIAC",  # S&P500
+broken_symbols = ["^VIX9D", "^VIX3M", "^VIX6M", "^VIX1Y",  # VIX symbols don't work
+                "HWM", "TT", "VIAC",  # S&P500
                   "MTA", "PIPR"]  # random symbols
 # "ANR", "BMC", "CA", "CBE", "CSC", "EP", "GLK", "KG", "JNY", "HNZ", "MEE", "MI", "NYX", "PCL", "PCP", "PTV", "RSH", "SAI", "SBL", "SCG", "SGP", "SLE", "SVU", "TIE", "TRB", "WFR", "XL"  # Removed from S&P500
 all_symbols_table_filename = "AllListedSymbols.csv"  # Up to date as of April 16 2018
 
 # Date range for data, and formatting of dates for saved csvs
 start_date = datetime.date(2005, 1, 1)  # start_date = datetime.date(2003, 6, 19)  # SPY closed at 100.02 on this date
-end_date = datetime.date(2020, 5, 31)  # end_date = datetime.date.today()
+end_date = datetime.date(2021, 1, 1)  # end_date = datetime.date.today()
 input_date_format = "%Y-%m-%d"
 output_date_format = "%Y_%m_%d"
 

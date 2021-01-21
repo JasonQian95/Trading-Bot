@@ -37,6 +37,7 @@ def rebalance(symbol=default_symbols, refresh=False, start_date=config.start_dat
             best_sharpe_ratio = sharpe_ratio
             best_portfolio_balance = i
     print("The best ratio was: {} {}, {} {} with a sharpe ratio of {}".format(best_portfolio_balance / increments, index, (increments - best_portfolio_balance) / increments, bonds, best_sharpe_ratio))
+    print("Date was: " + index_df.last_valid_index().strftime("%Y-%m-%d"))
     return best_portfolio_balance / increments
 
 
