@@ -442,7 +442,7 @@ class Simulation:
                 self.times[read_signals_time] = self.times[read_signals_time] + timer() - start_time
                 return ta.default_signal
             except ValueError:
-                print(symbol)
+                print("Encountered an error reading signals for " + symbol)
                 # If it complains about usecols not finding the columns, then generate_signals skipped a symbol for some reason
                 # Or if I skipped generate_signals, symbols with insufficient data won't be removed
                 raise

@@ -1,0 +1,61 @@
+Symbols that are missing data:
+AGLY
+CLVR
+HUNTF
+KLDI
+LAZY
+SONG
+
+Extra rows:
+BTRS first row
+FSR first row
+HYLN first row
+
+Symbols that I had to manually fix from fiverr data
+ATNF-source from nasdaq.com instead of yahoo, replaced with yahoo
+EQOS-source from nasdaq.com instead of yahoo, replaced with yahoo
+HTOO-data missing on yahoo, somehow or another theres data in the file now, don't know who did it or what the source is, fixed
+HOFV-dates and prices wrong, fixed
+PECK-data wrong, fixed
+XYNO-dates from May 2019 and May 2020???, fixed
+
+KIXN - Missing
+GB - wrong dates
+METX - wrong dates
+GTYH - wrong dates
+
+Instructions given:
+Hi, I have a request for a data entry job that involves scraping data from Yahoo Finance. Unfortunately their API/download historical data functionality is not working, hence this request (although if you get it to work, it would make the task easier).
+
+Basically, I have a .csv file containing a list of tickers/companies, in the column 'Post-SPAC Ticker Symbol' and dates, in the column 'Completion Date'. For each of these tickers, I want the following data in the following format:
+
+A file named '<Ticker>Price.csv' with 2 columns and 12 rows
+The columns are 'Date' and 'Close'
+The remaining 11 rows are the 'Completion Date' for that stock and the 'Close' price on that date, from Yahoo Finance, as well as the 5 rows before and after the given date, in order of earliest date to latest date. This data can be found by searching the ticker on Yahoo Finance and going to the 'Historical Data' tab, eg. https://ca.finance.yahoo.com/quote/BMTX/history?p=BMTX You can create the files in Excel but please save them as .csv files.
+
+In total there are ~100 tickers in this list, 11 days per ticker that I want data for, and 2 values per column, for a total of ~2200 entries
+
+An example:
+
+In the file I will provide:
+Post-SPAC Ticker Symbol, Completion Date
+BMTX, 1/5/2021
+
+The file I want:
+BMTXPrice.csv
+Date, Close
+12/28/2020, 14.26
+12/29/2020, 13.42
+12/30/2020, 13.08
+12/31/2020, 14.04
+1/4/2021, 14.87
+1/5/2021, 14.76
+1/6/2021, 15.50
+1/7/2021, 13.67
+1/8/2021, 14.03
+1/11/2021, 13.85
+1/12/2021, 15.12
+
+If Yahoo does not have the data then data from either of these sites is also acceptable:
+https://www.investing.com/equities/social-capital-hedosophia-hold-iii-historical-data
+https://www.nasdaq.com/market-activity/stocks/clov/historical

@@ -97,3 +97,8 @@ paths = [data_path, prices_data_path, prices_graphs_path, simulation_data_path, 
 for path in paths:
     if not exists(path):
         makedirs(path)
+
+# not included in the above paths because SPACs require mansual attention
+spac_folder_name = "SPAC"
+spac_data_path = join(prices_data_path, spac_folder_name) if not trash_data_files else join(junk_data_path, spac_folder_name)
+spac_graphs_path = join(spac_data_path, graphs_folder_name)

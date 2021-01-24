@@ -232,4 +232,3 @@ def get_signal_name(sterm_vol_symbol=None, lterm_vol_symbol=None, symbol=default
     sterm_vol_symbol = short_term_vol_symbol if sterm_vol_symbol is None else sterm_vol_symbol
     lterm_vol_symbol = long_term_vol_symbol if lterm_vol_symbol is None else lterm_vol_symbol
     return "VolContango" + config.vol_dict.get(sterm_vol_symbol) + config.vol_dict.get(lterm_vol_symbol)
-
