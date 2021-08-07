@@ -6,6 +6,8 @@ import pandas as pd
 import config
 
 import datetime
+from enum import Enum
+from functools import lru_cache
 import inspect
 import os
 from os.path import join, exists
@@ -87,6 +89,7 @@ def refresh(path, refresh=False):
     return not exists(path) or refresh
 
 
+@lru_cache(maxsize=128)
 def add_business_days(start_date, ndays):
     """Adds business days to a given date. Does not account for holidays.
 
@@ -120,7 +123,7 @@ def add_business_days(start_date, ndays):
     return current_date if not is_timestamp else pd.Timestamp(current_date)
 
 
-def prettify_ax(ax, title="", center=False, percentage=False, start_date=config.start_date, end_date=config.end_date):
+def prettify_ax(ax, title="", center=False, percentage=False, log_scale=False, start_date=config.start_date, end_date=config.end_date):
     """Makes matplotlib.pyplot.Axes look pretty
 
     Parameters:
@@ -175,6 +178,9 @@ def prettify_ax(ax, title="", center=False, percentage=False, start_date=config.
         # ax.yaxis.set_ticks(np.arange(0, 100, 10))
         # ax.set_yticks([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
 
+    if log_scale:
+        ax.set_yscale("log")
+
     # TODO: do this for the dates too. Have to get locators, since there are too many ticks
     # Is this code below the same as this?: ax.xaxis.grid(color='gray', linestyle='dashed')
     # for y in range(ax.get_ylim()[0], ax.get_ylim()[1], 10):
@@ -222,3 +228,9 @@ def debug(s, debug=False):
             mpl.pyplot.close()
         else:
             print(s, flush=True)
+
+
+class Mode(Enum):
+    long = 1
+    short = 2
+

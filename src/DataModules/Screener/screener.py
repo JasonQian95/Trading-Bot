@@ -10,7 +10,7 @@ import rsi
 import bb
 
 import config
-import tautils as ta
+import stats as ta
 import utils
 
 import schedule

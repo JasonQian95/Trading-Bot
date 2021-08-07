@@ -1,11 +1,19 @@
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 import prices
 import config
 import utils
-import tautils as ta
+
+# strategy from:
+# https://logical-invest.com/universal-investment-strategy/
+# https://seekingalpha.com/article/2714185-the-spy-tlt-universal-investment-strategy
+# https://seekingalpha.com/article/2823336-spy-tlt-universal-investment-strategy-20-year-backtest
+# https://seekingalpha.com/article/3050016-hell-on-fire-the-3x-leveraged-universal-investment-strategy-part-i
+# https://seekingalpha.com/article/4299701-leveraged-etfs-for-long-term-investing
+# https://seekingalpha.com/article/4115470-strategy-beats-vanguard-mutual-funds-and-etfs
+# https://seekingalpha.com/article/3548056-simple-spy-top-off-portfolio
+# https://www.bogleheads.org/forum/viewtopic.php?t=272007
 
 index = "UPRO"
 bonds = "TMF"

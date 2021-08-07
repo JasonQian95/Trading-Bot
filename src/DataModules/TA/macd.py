@@ -5,7 +5,7 @@ import pandas as pd
 import prices
 import config
 import utils
-import tautils as ta
+import stats as ta
 
 table_filename = "MACD.csv"
 graph_filename = ".png"
