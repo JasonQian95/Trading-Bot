@@ -5,7 +5,7 @@ import pandas as pd
 import prices
 import config
 import utils
-import stats as ta
+import tautils as ta
 
 from pandas_datareader._utils import RemoteDataError
 

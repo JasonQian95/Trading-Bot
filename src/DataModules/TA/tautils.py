@@ -103,7 +103,7 @@ def get_cgar(symbol, start_date=config.start_date, end_date=config.end_date):
         prices.download_data_from_yahoo(symbol, start_date=start_date, end_date=end_date)
     df = pd.read_csv(utils.get_file_path(config.prices_data_path, prices.price_table_filename, symbol=symbol), index_col="Date", parse_dates=["Date"])[start_date:end_date]
     # Formula normally has a -1 at the end
-    return (df["Close"].add(df["Dividends"].cumsum())[-1] / df["Close"][0]) ** (1 / (df.index[-1] - df.index[0]).days / 252)
+    return (df["Close"].add(df["Dividends"].cumsum())[-1] / df["Close"][0]) ** (1 / ((df.index[-1] - df.index[0]).days / 365)) # 252 trading days
 
 
 # 5 yr looks good, 10yr looks off of Yahoo's values for SPY

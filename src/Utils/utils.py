@@ -231,6 +231,7 @@ def debug(s, debug=False):
 
 
 class Mode(Enum):
-    long = 1
-    short = 2
+    Long = 1
+    Short = 2
+    LongShort = 3
 

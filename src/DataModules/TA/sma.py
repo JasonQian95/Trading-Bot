@@ -5,7 +5,7 @@ import pandas as pd
 import prices
 import config
 import utils
-import stats as ta
+import tautils as ta
 
 table_filename = "SMA.csv"
 graph_filename = ".png"

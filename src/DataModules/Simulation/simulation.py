@@ -14,7 +14,7 @@ import prices
 import sp500_wiki_scrapper as sp
 import config
 import utils
-import stats as ta
+import tautils as ta
 
 from collections import OrderedDict
 import datetime
